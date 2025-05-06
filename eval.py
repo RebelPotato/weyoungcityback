@@ -124,17 +124,18 @@ async def main():
                     results
                 )
 
+    trio.sleep(1) # wait for socket to close
     end_time = time.time()
     logger.info(f"Total time: {end_time - start_time:.2f} seconds")
     info = questions.inner_join(keys=("question_id",), other=results)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    os.makedirs(res_folder, exist_ok=True)
-    with open(
-        os.path.join(res_folder, f"{timestamp}.csv"),
-        "w",
-        encoding="utf-8",
-    ) as f:
-        info.to_csv(f, dialect="unix")
+    # os.makedirs(res_folder, exist_ok=True)
+    # with open(
+    #     os.path.join(res_folder, f"{timestamp}.csv"),
+    #     "w",
+    #     encoding="utf-8",
+    # ) as f:
+    #     info.to_csv(f, dialect="unix")
 
     question_count = len(info)
     correct_count = len(info.restrict(["verdict"], lambda v: v == "AC"))
