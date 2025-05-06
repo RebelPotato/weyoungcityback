@@ -54,15 +54,18 @@ async def judge(
 
     judged = ans.query(question, base64_frames)
     response = None
-    for _ in range(10):
+    llm_calls = 0
+    while llm_calls < 10:
         try:
             action = judged.send(response)
             match action["action"]:
                 case "complete":
                     response = await client.chat.completions.create(
                         model=action["model"],
+                        messages=action["messages"],
                         **action["kwargs"],
                     )
+                    llm_calls += 1
                 case _:
                     raise ValueError(f"Unknown action: {action['action']}")
         except StopIteration as e:
@@ -75,8 +78,8 @@ async def judge(
             logger.info(f"[{question_id}]<RE> {e}")
             results.append((question_id, "", "RE"))
             return
-    logger.info(f"[{question_id}]<RE> Timeout")
-    results.append((question_id, "", "RE"))
+    logger.info(f"[{question_id}]<LULE> LLM Use Limit Exceeded")
+    results.append((question_id, "", "LULE"))
     return
 
 
@@ -88,11 +91,13 @@ async def main():
 
     # Read API key from key.json
     with open(key_file, "r") as f:
-        api_key = json.load(f).get("key")
+        options = json.load(f)
+        api_key = options.get("key")
+        base_url = options.get("base_url")
 
     client = openai.AsyncOpenAI(
         api_key=api_key,
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        base_url=base_url,
     )
 
     questions = Table(
@@ -124,7 +129,7 @@ async def main():
                     results
                 )
 
-    trio.sleep(1) # wait for socket to close
+    await trio.sleep(1) # wait for socket to close
     end_time = time.time()
     logger.info(f"Total time: {end_time - start_time:.2f} seconds")
     info = questions.inner_join(keys=("question_id",), other=results)

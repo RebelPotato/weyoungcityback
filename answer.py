@@ -3,10 +3,11 @@ from typing import List
 import json
 
 
-def complete(model, **kwargs):
+def complete(model, messages, **kwargs):
     return {
         "action": "complete",
         "model": model,
+        "messages": messages,
         "kwargs": kwargs,
     }
 
