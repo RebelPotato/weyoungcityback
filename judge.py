@@ -1,4 +1,6 @@
 import json
+import docker.models
+import docker.models.containers
 from eztable import Table
 import os
 import cv2
@@ -8,14 +10,15 @@ import logging
 import time
 import openai
 import trio
-import sys
+import docker
 import pickle
 from typing import TypedDict, List
 import snoop
+from contextlib import contextmanager
 
 HEADER_SIZE = 16
 PORT = 4001
-BATCH_SIZE = 12
+BATCH_SIZE = 3
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
@@ -202,9 +205,7 @@ async def collector(results: Table, results_recv_chan: trio.MemoryReceiveChannel
     logger.info("collecter: no result left to collect, exiting...")
 
 
-async def main():
-    video_folder = r"./videos"
-    qa_file = r"./MVBench_qa.json"
+def get_client():
     key_file = r"./key.json"
 
     # Read API key from key.json
@@ -213,11 +214,14 @@ async def main():
         api_key = options.get("key")
         base_url = options.get("base_url")
 
-    client = openai.AsyncOpenAI(
+    return openai.AsyncOpenAI(
         api_key=api_key,
         base_url=base_url,
     )
 
+
+def get_questions():
+    qa_file = r"./MVBench_qa.json"
     questions = Table(
         [("question_id", int), ("video_file", str), ("question", str), ("answer", str)]
     )
@@ -231,63 +235,85 @@ async def main():
                     item["answer"],
                 )
             )
+    return questions
 
+
+@contextmanager
+def container_manager(container: docker.models.containers.Container):
+    try:
+        logger.info("docker: eval spawned")
+        yield container
+    finally:
+        container.stop()
+        logger.info("docker: eval stopped")
+
+
+async def main():
+    video_folder = r"./videos"
+    openai_client = get_client()
+    docker_client = docker.from_env()
+    questions = get_questions()
     start_time = time.time()
     results = Table([("question_id", int), ("output", str), ("verdict", str)])
-    async with trio.open_nursery() as task_nursery:
-        await task_nursery.start(
-            trio.run_process, ["uv", "run", "eval.py"]
+
+    with container_manager(
+        docker_client.containers.run(
+            "judged",
+            detach=True,
+            read_only=True,
+            remove=True,
+            ports={f"{PORT}/tcp": PORT},
+            tmpfs={"/tmp": "rw"},
+            volumes={
+                os.path.abspath("answer.py"): {
+                    "bind": "/app/answer.py",
+                    "mode": "ro",
+                }
+            },
         )
-        logger.info("main: eval spawned")
+    ):
         await trio.sleep(3)
 
         judged_stream = await trio.open_tcp_stream("127.0.0.1", PORT)
         eval_send_chan, eval_recv_chan = trio.open_memory_channel(0)
         response_send_chan, response_recv_chan = trio.open_memory_channel(0)
         collect_send_chan, collect_recv_chan = trio.open_memory_channel(0)
-        async with (
-            judged_stream,
-            eval_send_chan,
-            eval_recv_chan,
-            response_send_chan,
-            response_recv_chan,
-            collect_send_chan,
-            collect_recv_chan,
-        ):
-            task_nursery.start_soon(
-                socket_sender,
+        async with trio.open_nursery() as task_nursery:
+            async with (
                 judged_stream,
-                eval_recv_chan.clone(),
-            )
-            task_nursery.start_soon(
-                socket_receiver,
-                judged_stream,
-                response_send_chan.clone(),
-            )
-            task_nursery.start_soon(
-                collector,
-                results,
-                collect_recv_chan.clone(),
-            )
-            for batch in batched(questions, BATCH_SIZE):
-                async with trio.open_nursery() as batch_nursery:
-                    for question_id, video_file, question, answer in batch:
-                        logger.info(f"Question [{question_id}]")
-                        batch_nursery.start_soon(
-                            judge,
-                            client,
-                            {
-                                "question_id": question_id,
-                                "video_path": os.path.join(video_folder, video_file),
-                                "question": question,
-                                "answer": answer,
-                            },
-                            collect_send_chan.clone(),
-                            eval_send_chan.clone(),
-                            response_recv_chan.clone(),
-                        )
-            # terminate every process
-            await eval_send_chan.send({"type": "done"})
+                eval_send_chan,
+                eval_recv_chan,
+                response_send_chan,
+                response_recv_chan,
+                collect_send_chan,
+                collect_recv_chan,
+            ):
+                task_nursery.start_soon(
+                    socket_sender, judged_stream, eval_recv_chan.clone()
+                )
+                task_nursery.start_soon(
+                    socket_receiver, judged_stream, response_send_chan.clone()
+                )
+                task_nursery.start_soon(collector, results, collect_recv_chan.clone())
+                for batch in batched(questions[0:12], BATCH_SIZE):
+                    async with trio.open_nursery() as batch_nursery:
+                        for question_id, video_file, question, answer in batch:
+                            logger.info(f"Question [{question_id}]")
+                            batch_nursery.start_soon(
+                                judge,
+                                openai_client,
+                                {
+                                    "question_id": question_id,
+                                    "video_path": os.path.join(
+                                        video_folder, video_file
+                                    ),
+                                    "question": question,
+                                    "answer": answer,
+                                },
+                                collect_send_chan.clone(),
+                                eval_send_chan.clone(),
+                                response_recv_chan.clone(),
+                            )
 
     end_time = time.time()
     logger.info(f"Total time: {end_time - start_time:.2f} seconds")

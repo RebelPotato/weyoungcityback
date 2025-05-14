@@ -4,7 +4,6 @@ import logging
 import warnings
 import sys
 from typing import List
-import snoop
 
 import answer as ans
 
@@ -118,7 +117,7 @@ async def eval_server(server_stream: trio.SocketStream):
 async def main():
     try:
         async with trio.open_nursery() as nursery:
-            listeners = await trio.open_tcp_listeners(PORT, host="127.0.0.1")
+            listeners = await trio.open_tcp_listeners(PORT, host="0.0.0.0")
             await trio.serve_listeners(eval_server, listeners, handler_nursery=nursery)
     except* SystemExit as group:
         for e in group.exceptions:
