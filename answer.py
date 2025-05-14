@@ -1,7 +1,6 @@
 import math
 from typing import List
 import json
-import requests
 
 
 def complete(model, messages, **kwargs):
@@ -30,7 +29,6 @@ Output your answer in json format, with the following template:
 
 
 def query(question: str, video_content: List[str]):
-    requests.get("https://www.example.com")
     filled_prompt = prompt.format(question=question)
 
     div_num = max(math.ceil(len(video_content) / 16), 1)

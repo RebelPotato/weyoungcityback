@@ -14,11 +14,12 @@ import docker
 import pickle
 from typing import TypedDict, List
 import snoop
+import pathlib
 from contextlib import contextmanager
 
 HEADER_SIZE = 16
 PORT = 4001
-BATCH_SIZE = 3
+BATCH_SIZE = 12
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
@@ -253,7 +254,6 @@ async def main():
     openai_client = get_client()
     docker_client = docker.from_env()
     questions = get_questions()
-    start_time = time.time()
     results = Table([("question_id", int), ("output", str), ("verdict", str)])
 
     with container_manager(
@@ -295,7 +295,8 @@ async def main():
                     socket_receiver, judged_stream, response_send_chan.clone()
                 )
                 task_nursery.start_soon(collector, results, collect_recv_chan.clone())
-                for batch in batched(questions[0:12], BATCH_SIZE):
+                start_time = time.time()
+                for batch in batched(questions, BATCH_SIZE):
                     async with trio.open_nursery() as batch_nursery:
                         for question_id, video_file, question, answer in batch:
                             logger.info(f"Question [{question_id}]")
@@ -314,8 +315,8 @@ async def main():
                                 eval_send_chan.clone(),
                                 response_recv_chan.clone(),
                             )
+                end_time = time.time()
 
-    end_time = time.time()
     logger.info(f"Total time: {end_time - start_time:.2f} seconds")
     info = questions.inner_join(keys=("question_id",), other=results).copy()
     question_count = len(info)
