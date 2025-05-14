@@ -2,10 +2,13 @@ import trio
 import pickle
 import logging
 import warnings
-import sys
+import concurrent.futures
 from typing import List
 
-import answer as ans
+try:
+    import answer as ans
+except ImportError:
+    import answer_zero as ans
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
@@ -14,6 +17,7 @@ warnings.filterwarnings("error")
 HEADER_SIZE = 16
 PORT = 4001
 running = {}
+executor = None
 
 
 async def receive_exactly(length: int, stream: trio.SocketStream) -> bytes | None:
@@ -48,9 +52,11 @@ async def read_data(stream: trio.SocketStream) -> dict | None:
         return None
 
 
-def start_task(question: str, base64_frames: List[str]):
+async def start_task(question: str, base64_frames: List[str]):
+    future = executor.submit(ans.query, question, base64_frames)
+    await trio.sleep(0)
     try:
-        process = ans.query(question, base64_frames)
+        process = future.result(timeout=10)
         return {
             "status": "ok",
             "process": process,
@@ -62,14 +68,14 @@ def start_task(question: str, base64_frames: List[str]):
         }
 
 
-def process(data: dict) -> dict:
+async def process(data: dict) -> dict:
     def send_error(exception: str):
         return {"status": "error", "exception": exception}
 
     match data["type"]:
         case "start":
             if data["question_id"] not in running:
-                result = start_task(data["question"], data["base64_frames"])
+                result = await start_task(data["question"], data["base64_frames"])
                 match result["status"]:
                     case "ok":
                         process = result["process"]
@@ -82,8 +88,10 @@ def process(data: dict) -> dict:
         case "continue":
             if data["question_id"] in running:
                 process = running[data["question_id"]]
+                future = executor.submit(process.send, data["response"])
+                await trio.sleep(0)
                 try:
-                    action = process.send(data["response"])
+                    action = future.result(timeout=10)
                 except StopIteration as e:
                     del running[data["question_id"]]
                     return {"status": "done", "value": e.value}
@@ -102,26 +110,18 @@ async def eval_server(server_stream: trio.SocketStream):
     while True:
         data = await read_data(server_stream)
         if data is None:
-            logger.info(f"eval: stream ends, closing...")
-            await server_stream.aclose()
-            return
-        if data["type"] == "done":
             logger.info(f"eval: eval complete! exiting...")
             await server_stream.aclose()
-            sys.exit(0)
+            return
 
-        result = process(data)
+        result = await process(data)
         await write_data(result, server_stream)
 
 
 async def main():
-    try:
-        async with trio.open_nursery() as nursery:
-            listeners = await trio.open_tcp_listeners(PORT, host="0.0.0.0")
-            await trio.serve_listeners(eval_server, listeners, handler_nursery=nursery)
-    except* SystemExit as group:
-        for e in group.exceptions:
-            raise e
+    global executor
+    executor = concurrent.futures.ThreadPoolExecutor()
+    await trio.serve_tcp(eval_server, PORT, host="0.0.0.0")
 
 
 trio.run(main)
