@@ -16,6 +16,7 @@ import sshtunnel
 import psycopg
 
 import data
+import problem0
 import problem1
 
 import snoop
@@ -24,7 +25,10 @@ HEADER_SIZE = 16
 PORT = 4001
 BATCH_SIZE = 12
 
-LOADERS = {"1": problem1.Loader()}
+LOADERS = {
+    "0": problem0.Loader(),
+    "1": problem1.Loader(),
+}
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
@@ -126,12 +130,17 @@ async def judge_question(
                 action = status["value"]
                 match action["action"]:
                     case "complete":
-                        response = await client.chat.completions.create(
-                            model=action["model"],
-                            messages=action["messages"],
-                            **action["kwargs"],
-                        )
-                        llm_calls += 1
+                        try:
+                            response = await client.chat.completions.create(
+                                model=action["model"],
+                                messages=action["messages"],
+                                **action["kwargs"],
+                            )
+                            llm_calls += 1
+                        except Exception as e:
+                            logger.error(f"[{question.id}]<RE> LLM Error: {e}")
+                            await send_RE(str(e))
+                            return
                     case _:
                         await send_RE(ValueError(f"Unknown action: {action}"))
                         return
@@ -351,7 +360,7 @@ async def main():
                     await trio.sleep(60)
                     continue
                 submission_id, problem_id, code = row
-                code = code.replace("\r\n", "\n") # Normalize line endings
+                code = code.replace("\r\n", "\n")  # Normalize line endings
                 async with await trio.open_file("answer.py", "w") as f:
                     await f.write(code)
                 logger.info(f"Submission {submission_id} loaded")

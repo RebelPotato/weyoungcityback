@@ -1,36 +1,15 @@
 import base64
 import warnings
 import logging
-import openai
-import trio
 import cv2
-from typing import TypedDict, List
+from typing import List
 import json
 import os
-from eztable import Table
 import data
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
 warnings.filterwarnings("error")
-
-
-def get_questions():
-    qa_file = r"./MVBench_qa.json"
-    questions = Table(
-        [("question_id", int), ("video_file", str), ("question", str), ("answer", str)]
-    )
-    with open(qa_file, "r") as f:
-        for item in json.load(f):
-            questions.append(
-                (
-                    item["Question_id"],
-                    item["video_id"],
-                    item["question"],
-                    item["answer"],
-                )
-            )
-    return questions
 
 
 def read_video(video_path: str) -> List[str]:
@@ -82,18 +61,21 @@ class Loader(data.Loader):
     """
     Loader for problem 1.
     """
+
     def path(self) -> str:
         return os.path.abspath("./problem1")
-    
+
     def load(self) -> List[Question]:
         qa_file = r"./problem1/MVBench_qa.json"
         acc = []
         with open(qa_file, "r") as f:
             for item in json.load(f):
-                acc.append(Question(
-                    id=item["Question_id"],
-                    video_path=os.path.join("./problem1/videos", item["video_id"]),
-                    question=item["question"],
-                    answer=item["answer"],
-                ))
+                acc.append(
+                    Question(
+                        id=item["Question_id"],
+                        video_path=os.path.join("./problem1/videos", item["video_id"]),
+                        question=item["question"],
+                        answer=item["answer"],
+                    )
+                )
         return acc

@@ -10,8 +10,15 @@ wheels/
 .venv
 
 # dataset and results
-videos
+problem0/imgs
+problem0/qa.json
+problem0/qa_final.json
+problem1/videos
+problem1/MVBench_qa.json
 results
+
+# temporary files
+answer.py
 
 key.json
 .scraps
