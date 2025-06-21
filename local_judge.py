@@ -1,1 +1,1 @@
-# TODO
+# judge a problem locally. This is sent to the contestant to judge their answer.

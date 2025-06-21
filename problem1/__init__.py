@@ -40,14 +40,17 @@ class Question(data.Question):
         self.question = question
         self.answer = answer
 
-    def start(self) -> dict:
+    def start(self) -> data.QuestionStart:
         base64_frames = read_video(self.video_path)
         logger.info(f"[{self.id}]{len(base64_frames)} frames read.")
-        return {
-            "question_id": self.id,
-            "question": self.question,
-            "base64_frames": base64_frames,
-        }
+        return data.QuestionStart(
+            timeout=1.0,
+            question_id=self.id,
+            kwargs={
+                "question": self.question,
+                "base64_frames": base64_frames,
+            },
+        )
 
     def judge(self, choice: str) -> data.Result:
         verdict = data.Accepted() if choice == self.answer else data.WrongAnswer(choice)

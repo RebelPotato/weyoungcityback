@@ -266,7 +266,7 @@ async def judge(
             ports={f"{PORT}/tcp": PORT},
             tmpfs={"/tmp": "rw"},
             volumes={
-                os.path.join(loader.path(), "eval.py"): {
+                os.path.abspath("eval.py"): {
                     "bind": "/app/eval.py",
                     "mode": "ro",
                 },
@@ -357,7 +357,7 @@ async def main():
                 row = cur.fetchone()
                 if row is None:
                     logger.info("No submissions to judge, sleeping ...")
-                    await trio.sleep(60)
+                    await trio.sleep(5)
                     continue
                 submission_id, problem_id, code = row
                 code = code.replace("\r\n", "\n")  # Normalize line endings

@@ -30,13 +30,13 @@ Output your answer in json format, with the following template:
 """
 
 
-def query(question: str, choices: List[str], base64_frame: str):
+def query(question: str, choices: List[str], base64_image: str):
     filled_prompt = prompt.format(question=question, choices="\n".join(choices))
 
     content = [
         {
             "type": "image_url",
-            "image_url": {"url": f"data:image/png;base64,{base64_frame}"},
+            "image_url": {"url": f"data:image/png;base64,{base64_image}"},
         },
         {"type": "text", "text": filled_prompt},
     ]

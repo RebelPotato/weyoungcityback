@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import trio
 import openai
-from typing import Generator, Iterable
+from typing import Generator, Iterable, TypedDict, Any
 
 
 class Result(ABC):
@@ -10,13 +10,21 @@ class Result(ABC):
         pass
 
 
+class QuestionStart(TypedDict):
+    question_id: int
+    timeout: float
+    kwargs: dict[str, Any]
+
+
 class Question(ABC):
     """
     A Question is a single test case for the judge to evaluate.
     """
+
     id: int
+
     @abstractmethod
-    def start(self) -> dict:
+    def start(self) -> QuestionStart:
         pass
 
     @abstractmethod
@@ -28,6 +36,7 @@ class Loader(ABC):
     """
     A Loader creates Questions from a source.
     """
+
     @abstractmethod
     def path(self) -> str:
         """

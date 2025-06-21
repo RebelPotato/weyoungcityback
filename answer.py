@@ -13,31 +13,29 @@ def complete(model, messages, **kwargs):
 
 
 prompt = """
-This image presents the perception data of an drone flying in a city environment from a first person perspective.
+This video (captured into multiple frames of images as follows) presents the perception data of an agent moving in the environment from a first person perspective. 
 
 {question}
-
-{choices}
 
 Output your answer in json format, with the following template:
 
 ```json
 {{
     "reason": "The reason for your choice.",
-    "choice": "Your choice. It should be a single letter.",
+    "choice": "Your choice. It should be a single letter A, B, C, D, or E",
 }}
 ```
 """
 
 
-def query(question: str, choices: List[str], base64_frame: str):
-    filled_prompt = prompt.format(question=question, choices="\n".join(choices))
+def query(question: str, base64_frames: List[str]):
+    filled_prompt = prompt.format(question=question)
+
+    div_num = max(math.ceil(len(base64_frames) / 16), 1)
+    video_content_selected = base64_frames[0::div_num]
 
     content = [
-        {
-            "type": "image_url",
-            "image_url": {"url": f"data:image/png;base64,{base64_frame}"},
-        },
+        {"type": "video", "video": video_content_selected},
         {"type": "text", "text": filled_prompt},
     ]
 

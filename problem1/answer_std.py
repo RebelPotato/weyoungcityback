@@ -28,11 +28,11 @@ Output your answer in json format, with the following template:
 """
 
 
-def query(question: str, video_content: List[str]):
+def query(question: str, base64_frames: List[str]):
     filled_prompt = prompt.format(question=question)
 
-    div_num = max(math.ceil(len(video_content) / 16), 1)
-    video_content_selected = video_content[0::div_num]
+    div_num = max(math.ceil(len(base64_frames) / 16), 1)
+    video_content_selected = base64_frames[0::div_num]
 
     content = [
         {"type": "video", "video": video_content_selected},
