@@ -1,9 +1,9 @@
 import trio
-import pickle
 import logging
 import warnings
-import concurrent.futures
-from typing import List
+from functools import partial
+from typing import Dict, Any
+import common
 
 try:
     import answer as ans
@@ -14,62 +14,50 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
 warnings.filterwarnings("error")
 
-HEADER_SIZE = 16
-PORT = 4001
 running = {}
 time_left = {}
 executor = None
 
 
-async def receive_exactly(length: int, stream: trio.SocketStream) -> bytes | None:
-    received = []
-    while length > 0:
-        part = await stream.receive_some(length)
-        if part == b"":
-            return None
-        received.append(part)
-        length -= len(part)
-    return b"".join(received)
-
-
-async def write_data(data: dict, stream: trio.SocketStream):
-    msg = pickle.dumps(data)
-    length = len(msg).to_bytes(HEADER_SIZE, "big")
-    await stream.send_all(length + msg)
-
-
-async def read_data(stream: trio.SocketStream) -> dict | None:
-    try:
-        length_msg = await receive_exactly(HEADER_SIZE, stream)
-        if length_msg is None:
-            return None
-        length = int.from_bytes(length_msg, "big")
-        msg = await receive_exactly(length, stream)
-        if msg is None:
-            return None
-        return pickle.loads(msg)
-    except trio.ClosedResourceError:
-        logger.info("stream closed, nothing to read...")
-        return None
-
-
-async def start_task(id: int, kwargs: dict):
-    global executor
-    assert executor is not None, "Executor not initialized."
-    future = executor.submit(ans.query, **kwargs)
-    try:
-        now = trio.current_time()
-        process = future.result(timeout=time_left[id])
+async def run_task(id: int, func: callable) -> Dict[str, Any]:
+    def done(e: StopIteration):
+        logger.info(f"Task {id} completed successfully.")
         time_left[id] -= trio.current_time() - now
-        return {
-            "status": "ok",
-            "process": process,
-        }
-    except Exception as e:
+        return {"status": "done", "value": e.value}
+
+    def error(e: Exception):
+        logger.error(f"Task {id} raised an exception: {e}")
         return {
             "status": "error",
-            "exception": e,
+            "exception": str(e),
         }
+
+    now = trio.current_time()
+    with trio.move_on_after(time_left[id]) as cancel_scope:
+        try:
+            logger.info(f"Task {id} run with time limit {time_left[id]} seconds.")
+            result = await trio.to_thread.run_sync(func, abandon_on_cancel=True)
+        except RuntimeError as e:
+            # A StopIteration exception should be converted to a RuntimeError when caught.
+            if isinstance(e.__cause__, StopIteration):
+                return done(e.__cause__)
+            else:
+                return error(e)
+        except StopIteration as e:
+            return done(e)
+        except Exception as e:
+            return error(e)
+    if cancel_scope.cancelled_caught:
+        logger.info(f"Task {id} time limit exceeded.")
+        return {
+            "status": "error",
+            "exception": "Time Limit Exceeded",
+        }
+    time_left[id] -= trio.current_time() - now
+    return {
+        "status": "ok",
+        "value": result,
+    }
 
 
 async def process(data: dict) -> dict:
@@ -79,56 +67,63 @@ async def process(data: dict) -> dict:
     id = data["question_id"]
     match data["type"]:
         case "start":
-            if id not in running:
+            if not (id in running):
+                running[id] = None
                 time_left[id] = data["timeout"]
-                result = await start_task(id, data["kwargs"])
+                result = await run_task(id, partial(ans.query, **data["kwargs"]))
                 match result["status"]:
                     case "ok":
-                        process = result["process"]
-                        running[id] = process
+                        running[id] = result["value"]
                         return {"status": "ok"}
                     case "error":
-                        return send_error(str(result["exception"]))
+                        del running[id]
+                        del time_left[id]
+                        return send_error(result["exception"])
+                    case "done":
+                        del running[id]
+                        del time_left[id]
+                        return send_error("Task completed unexpectedly")
             else:
-                return send_error("Task already running")
+                # protocol error
+                raise ValueError(f"Task {id} is already running")
+
         case "continue":
             if id in running:
                 process = running[id]
-                future = executor.submit(process.send, data["response"])
-                try:
-                    now = trio.current_time()
-                    action = future.result(timeout=time_left[id])
-                    time_left[id] -= trio.current_time() - now
-                except StopIteration as e:
-                    del running[id]
-                    return {"status": "done", "value": e.value}
-                except Exception as e:
-                    del running[id]
-                    return send_error(str(e))
-                return {"status": "ok", "value": action}
+                result = await run_task(id, partial(process.send, data["response"]))
+                match result["status"]:
+                    case "ok":
+                        return {"status": "ok", "value": result["value"]}
+                    case "error":
+                        del running[id]
+                        del time_left[id]
+                        return send_error(result["exception"])
+                    case "done":
+                        del running[id]
+                        del time_left[id]
+                        return {"status": "done", "value": result["value"]}
             else:
-                return send_error("Task not found")
+                # protocol error
+                raise ValueError(f"Task {id} is not running")
         case _:
-            # Unknown data, bug in the client. The only valid option is to crash.
+            # protocol error
             raise ValueError(f"Unknown data type: {data}")
 
 
 async def eval_server(server_stream: trio.SocketStream):
     while True:
-        data = await read_data(server_stream)
+        data = await common.read_data(server_stream)
         if data is None:
             logger.info(f"eval: eval complete! exiting...")
             await server_stream.aclose()
             return
 
         result = await process(data)
-        await write_data(result, server_stream)
+        await common.write_data(result, server_stream)
 
 
 async def main():
-    global executor
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    await trio.serve_tcp(eval_server, PORT, host="0.0.0.0")
+    await trio.serve_tcp(eval_server, common.PORT, host="0.0.0.0")
 
 
 trio.run(main)

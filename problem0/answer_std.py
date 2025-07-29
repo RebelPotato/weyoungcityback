@@ -1,5 +1,5 @@
 import math
-from typing import List
+from typing import List, Generator, Any
 import json
 
 
@@ -30,7 +30,9 @@ Output your answer in json format, with the following template:
 """
 
 
-def query(question: str, choices: List[str], base64_image: str):
+def query(
+    question: str, choices: List[str], base64_image: str
+) -> Generator[dict, Any, str]:
     filled_prompt = prompt.format(question=question, choices="\n".join(choices))
 
     content = [

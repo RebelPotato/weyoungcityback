@@ -1,5 +1,5 @@
 import math
-from typing import List
+from typing import List, Generator, Any
 import json
 
 
@@ -28,7 +28,7 @@ Output your answer in json format, with the following template:
 """
 
 
-def query(question: str, base64_frames: List[str]):
+def query(question: str, base64_frames: List[str]) -> Generator[dict, Any, str]:
     filled_prompt = prompt.format(question=question)
 
     div_num = max(math.ceil(len(base64_frames) / 16), 1)

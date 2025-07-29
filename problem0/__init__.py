@@ -63,9 +63,8 @@ class Loader(data.Loader):
         return os.path.abspath("./problem0")
 
     def load(self) -> List[Question]:
-        qa_file = r"./problem0/qa_final.json"
         acc = []
-        with open(qa_file, "r", encoding="utf-8") as f:
+        with open(r"./problem0/qa_final.json", "r", encoding="utf-8") as f:
             for item in json.load(f):
                 if "image_id" not in item:
                     continue
@@ -80,5 +79,4 @@ class Loader(data.Loader):
                 )
                 if len(acc) >= 200:
                     break
-        logger.info(f"Loaded {len(acc)} questions from {qa_file}.")
         return acc

@@ -1,6 +1,4 @@
 from abc import ABC, abstractmethod
-import trio
-import openai
 from typing import Generator, Iterable, TypedDict, Any
 
 

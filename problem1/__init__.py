@@ -69,9 +69,8 @@ class Loader(data.Loader):
         return os.path.abspath("./problem1")
 
     def load(self) -> List[Question]:
-        qa_file = r"./problem1/MVBench_qa.json"
         acc = []
-        with open(qa_file, "r") as f:
+        with open(r"./problem1/MVBench_qa.json", "r") as f:
             for item in json.load(f):
                 acc.append(
                     Question(
