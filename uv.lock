@@ -821,7 +821,7 @@ wheels = [
 ]
 
 [[package]]
-name = "weicityback"
+name = "wycitybackback"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

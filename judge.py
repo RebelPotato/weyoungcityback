@@ -206,7 +206,7 @@ async def task_container(docker_client: docker.DockerClient, loader: data.Loader
             "judged",
             detach=True,
             read_only=True,
-            remove=True,
+            remove=os.environ.get("WYCB_DEBUG", "false").lower() != "true",
             ports={f"{common.PORT}/tcp": common.PORT},
             tmpfs={"/tmp": "rw"},
             volumes={
