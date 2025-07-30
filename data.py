@@ -100,7 +100,7 @@ class TimeLimitExceeded(Result):
         return "<TLE> Time Limit Exceeded"
 
 
-class LLMUseLimitExceeded(Result):
+class LLMUsageLimitExceeded(Result):
     def accepted(self) -> bool:
         return False
 
@@ -108,4 +108,4 @@ class LLMUseLimitExceeded(Result):
         return f"LULE"
 
     def __repr__(self):
-        return "<LULE> LLM Use Limit Exceeded"
+        return "<LULE> LLM Usage Limit Exceeded"

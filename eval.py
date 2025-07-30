@@ -38,7 +38,7 @@ async def run_task(id: int, func: Callable[[], Any]) -> common.Response:
     result = None
     elapsed = time_left[id] + 1
     with trio.move_on_after(time_left[id] + 0.5) as cancel_scope:
-        # add 0.5 seconds to allow for spawning and processings
+        # add 0.5 seconds to allow for spawning and processing
         try:
             logger.info(f"Task {id} started with {time_left[id]} seconds left")
             result, elapsed = await trio.to_thread.run_sync(

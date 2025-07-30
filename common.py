@@ -6,7 +6,6 @@ from typing import Any, Union, TypeVar
 
 PORT = 4001
 HEADER_SIZE = 16
-A = TypeVar("A")
 
 
 async def receive_exactly(length: int, stream: trio.SocketStream) -> bytes | None:

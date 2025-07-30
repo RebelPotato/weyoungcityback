@@ -114,7 +114,7 @@ async def judge_question(
             if result != None:
                 await send_result(result)
                 return
-        await send_result(data.LLMUseLimitExceeded())
+        await send_result(data.LLMUsageLimitExceeded())
 
 
 async def socket_sender(
