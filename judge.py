@@ -73,9 +73,9 @@ async def judge_question(
         try:
             value = await client.chat.completions.create(
                 model=action.model,
-                messages=action.messages,
+                messages=action.messages,  # type: ignore
                 **action.kwargs,
-            )
+            )  # type: ignore
             llm_calls += 1
         except Exception as e:
             return result_err(repr(e))
@@ -186,48 +186,39 @@ class Keys(TypedDict):
 def get_keys() -> Keys:
     key_file = r"./key.json"
     with open(key_file, "r") as f:
-        options: dict = json.load(f)
-        return Keys(
-            api_key=options.get("api_key"),
-            base_url=options.get("base_url"),
-            ssh_username=options.get("ssh_username"),
-            ssh_password=options.get("ssh_password"),
-            pg_user=options.get("pg_user"),
-            pg_password=options.get("pg_password"),
-            pg_database=options.get("pg_database"),
-        )
+        return Keys(**json.load(f))
 
 
 @asynccontextmanager
 async def task_container(docker_client: docker.DockerClient, loader: data.Loader):
-    try:
-        logger.info("docker: eval spawned")
-        container = docker_client.containers.run(
-            "judged",
-            detach=True,
-            read_only=True,
-            remove=os.environ.get("WYCB_DEBUG", "false").lower() != "true",
-            ports={f"{common.PORT}/tcp": common.PORT},
-            tmpfs={"/tmp": "rw"},
-            volumes={
-                os.path.abspath("eval.py"): {
-                    "bind": "/app/eval.py",
-                    "mode": "ro",
-                },
-                os.path.abspath("common.py"): {
-                    "bind": "/app/common.py",
-                    "mode": "ro",
-                },
-                os.path.abspath("answer.py"): {
-                    "bind": "/app/answer.py",
-                    "mode": "ro",
-                },
-                os.path.join(loader.path(), "answer_zero.py"): {
-                    "bind": "/app/answer_zero.py",
-                    "mode": "ro",
-                },
+    container = docker_client.containers.run(
+        "judged",
+        detach=True,
+        read_only=True,
+        remove=os.environ.get("WYCB_DEBUG", "false").lower() != "true",
+        ports={f"{common.PORT}/tcp": common.PORT},
+        tmpfs={"/tmp": "rw"},
+        volumes={
+            os.path.abspath("eval.py"): {
+                "bind": "/app/eval.py",
+                "mode": "ro",
             },
-        )
+            os.path.abspath("common.py"): {
+                "bind": "/app/common.py",
+                "mode": "ro",
+            },
+            os.path.abspath("answer.py"): {
+                "bind": "/app/answer.py",
+                "mode": "ro",
+            },
+            os.path.join(loader.path(), "answer_zero.py"): {
+                "bind": "/app/answer_zero.py",
+                "mode": "ro",
+            },
+        },
+    )
+    logger.info("docker: container for eval.py spawned")
+    try:
         await trio.sleep(3)  # wait for the container to be ready
         yield container
     finally:
@@ -303,6 +294,7 @@ async def main():
         ssh_password=keys["ssh_password"],
         remote_bind_address=("localhost", 5432),
     ) as tunnel:
+        assert tunnel is not None, "SSH tunnel failed to start"
         tunnel.start()
         logger.info("SSH tunnel started")
         with (

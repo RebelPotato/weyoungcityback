@@ -41,6 +41,7 @@ class Request(abc.ABC):
     def dump(self) -> bytes:
         pass
 
+    @staticmethod
     def load(b: bytes) -> "Request":
         """Load a Request from bytes."""
         d = pickle.loads(b)
@@ -92,6 +93,7 @@ class Response(abc.ABC):
     def dump(self) -> bytes:
         pass
 
+    @staticmethod
     def load(b: bytes) -> "Response":
         """Load a Response from bytes."""
         d = pickle.loads(b)
@@ -142,6 +144,7 @@ class Action(abc.ABC):
     def dump(self) -> dict:
         pass
 
+    @staticmethod
     def load(d: dict) -> "Action":
         """Load an Action from a dict."""
         type = d["type"]

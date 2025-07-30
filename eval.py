@@ -3,6 +3,7 @@ import logging
 import warnings
 import time
 from functools import partial, singledispatch
+from typing import Callable, Any
 import common
 
 try:
@@ -19,13 +20,13 @@ time_left = {}
 executor = None
 
 
-def timed(func: callable):
+def timed(func: Callable[[], Any]):
     now = time.time()
     result = func()
     return result, time.time() - now
 
 
-async def run_task(id: int, func: callable) -> common.Response:
+async def run_task(id: int, func: Callable[[], Any]) -> common.Response:
     def done(e: StopIteration):
         logger.info(f"Task {id} completed successfully")
         return common.DoneRes(value=e.value)
@@ -34,6 +35,8 @@ async def run_task(id: int, func: callable) -> common.Response:
         logger.error(f"Task {id} raised an exception: {e}")
         return common.ErrRes(exception=repr(e))
 
+    result = None
+    elapsed = time_left[id] + 1
     with trio.move_on_after(time_left[id] + 0.5) as cancel_scope:
         # add 0.5 seconds to allow for spawning and processings
         try:

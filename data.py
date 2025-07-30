@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Any
 import common
 
 
@@ -29,7 +29,7 @@ class Question(ABC):
         pass
 
     @abstractmethod
-    def judge(self, value: any) -> Result:
+    def judge(self, value: Any) -> Result:
         pass
 
 
@@ -62,7 +62,7 @@ class Accepted(Result):
 
 
 class WrongAnswer(Result):
-    def __init__(self, answer: any):
+    def __init__(self, answer: Any):
         self.answer = answer
 
     def accepted(self) -> bool:
