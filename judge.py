@@ -10,6 +10,7 @@ import docker
 from typing import TypedDict, Dict
 from functools import singledispatch
 from contextlib import asynccontextmanager
+from colorama import just_fix_windows_console
 import sshtunnel
 import psycopg
 
@@ -22,6 +23,7 @@ import problem1
 WORKER_COUNT = 12
 WORKER_LIMITER = trio.CapacityLimiter(WORKER_COUNT)
 
+# TODO: make Loader an object
 LOADERS: Dict[str, data.Loader] = {
     "0": problem0.Loader(),
     "1": problem1.Loader(),
@@ -35,9 +37,9 @@ warnings.filterwarnings("error")
 async def judge_question(
     question: data.Question,
     client: openai.AsyncOpenAI,
-    collect_send_chan: trio.MemorySendChannel,
-    eval_send_chan: trio.MemorySendChannel,
-    response_recv_chan: trio.MemoryReceiveChannel,
+    collect_send_chan: trio.MemorySendChannel[data.Result],
+    eval_send_chan: trio.MemorySendChannel[bytes],
+    response_recv_chan: trio.MemoryReceiveChannel[bytes],
 ):
     """
     Asynchronously judge a question.
@@ -118,7 +120,7 @@ async def judge_question(
 
 
 async def socket_sender(
-    client_stream: trio.SocketStream, eval_recv_chan: trio.MemoryReceiveChannel
+    client_stream: trio.SocketStream, eval_recv_chan: trio.MemoryReceiveChannel[bytes]
 ):
     """Adapter from ReceiveChannel to SocketStream."""
     logger.info("sender: started")
@@ -129,7 +131,8 @@ async def socket_sender(
 
 
 async def socket_receiver(
-    client_stream: trio.SocketStream, response_send_chan: trio.MemorySendChannel
+    client_stream: trio.SocketStream,
+    response_send_chan: trio.MemorySendChannel[bytes],
 ):
     """Adapter from SocketStream to SendChannel."""
     logger.info("receiver: started")
@@ -145,34 +148,39 @@ async def socket_receiver(
 class Results:
     def __init__(self):
         self.total = 0
-        self.correct = 0
+        self.count = {}
 
     def add(self, result: data.Result):
         self.total += 1
-        if result.accepted():
-            self.correct += 1
+        c = result.__class__
+        self.count[c] = self.count.get(c, 0) + 1
 
     def accuracy(self) -> float:
         if self.total == 0:
             return 0.0
-        return self.correct / self.total
+        return self.count[data.Accepted] / self.total
 
     def score(self) -> int:
         return max(1, math.floor(self.accuracy() * 100))
 
     def log(self):
-        logger.info(f"Accuracy: {self.accuracy():.2f}% [{self.correct}/{self.total}]")
+        logger.info(
+            f"Accuracy: {self.accuracy():.2f}% [{self.count[data.Accepted]}/{self.total}]"
+        )
 
 
-async def collector(results: Results, results_recv_chan: trio.MemoryReceiveChannel):
+async def collector(
+    results: Results, collect_recv_chan: trio.MemoryReceiveChannel[data.Result]
+):
     """Collect results from the results channel."""
     logger.info("collector: started")
-    async with results_recv_chan:
-        async for data in results_recv_chan:
+    async with collect_recv_chan:
+        async for data in collect_recv_chan:
             results.add(data)
     logger.info("collecter: no result left to collect, exiting...")
 
 
+# TODO: make this a dataclass
 class Keys(TypedDict):
     api_key: str
     base_url: str
@@ -226,25 +234,14 @@ async def task_container(docker_client: docker.DockerClient, loader: data.Loader
         logger.info("docker: eval stopped")
 
 
-async def judge(
-    docker_client: docker.DockerClient,
-    openai_client: openai.AsyncOpenAI,
-    problem_id: str,
-) -> int:
-    """Judge one submission."""
-    if not problem_id in LOADERS:
-        logger.info(f"Problem ID {problem_id} not supported. Check LOADERS!")
-        return 1
-    results = Results()
-    loader = LOADERS[problem_id]
-    async with (
-        task_container(docker_client, loader),
-        trio.open_nursery() as task_nursery,
-    ):
+async def judge_problem(
+    openai_client: openai.AsyncOpenAI, loader: data.Loader, results: Results
+):
+    async with (trio.open_nursery() as task_nursery,):
         judged_stream = await trio.open_tcp_stream("127.0.0.1", common.PORT)
-        eval_send_chan, eval_recv_chan = trio.open_memory_channel(0)
-        response_send_chan, response_recv_chan = trio.open_memory_channel(0)
-        collect_send_chan, collect_recv_chan = trio.open_memory_channel(0)
+        eval_send_chan, eval_recv_chan = trio.open_memory_channel[bytes](0)
+        response_send_chan, response_recv_chan = trio.open_memory_channel[bytes](0)
+        collect_send_chan, collect_recv_chan = trio.open_memory_channel[data.Result](0)
         start_time = time.time()
         async with (
             judged_stream,
@@ -277,10 +274,10 @@ async def judge(
 
     logger.info(f"Total time: {end_time - start_time:.2f} seconds")
     results.log()
-    return results.score()
 
 
 async def main():
+    just_fix_windows_console()
     keys = get_keys()
     openai_client = openai.AsyncOpenAI(
         api_key=keys["api_key"],
@@ -317,11 +314,17 @@ async def main():
                     await trio.sleep(5)
                     continue
                 submission_id, problem_id, code = row
-                code = code.replace("\r\n", "\n")  # Normalize line endings
-                async with await trio.open_file("answer.py", "w") as f:
+                # code = code.replace("\r\n", "\n")  # Normalize line endings. TODO: is this needed?
+                async with await trio.open_file("answer.py", "wb") as f:
                     await f.write(code)
                 logger.info(f"Submission {submission_id} loaded")
-                score = await judge(docker_client, openai_client, problem_id)
+
+                loader = LOADERS[problem_id]
+                results = Results()
+                async with task_container(docker_client, loader):
+                    await judge_problem(openai_client, loader, results)
+                score = results.score()
+
                 logger.info(f"Writing {submission_id} to database ...")
                 cur.execute(
                     "UPDATE submissions SET score = %s WHERE id = %s",

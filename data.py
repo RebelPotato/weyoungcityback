@@ -1,17 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import List, Any
 import common
+from dataclasses import dataclass
+from colorama import Fore, Back, Style
 
 
 class Result(ABC):
-    @abstractmethod
-    def accepted(self) -> bool:
-        pass
-
-    @abstractmethod
-    def __str__(self) -> str:
-        pass
-
     @abstractmethod
     def __repr__(self) -> str:
         pass
@@ -50,62 +44,36 @@ class Loader(ABC):
         pass
 
 
+@dataclass
 class Accepted(Result):
-    def accepted(self) -> bool:
-        return True
-
-    def __str__(self):
-        return "AC"
-
     def __repr__(self):
         return "<AC> Accepted"
 
 
+@dataclass
 class WrongAnswer(Result):
-    def __init__(self, answer: Any):
-        self.answer = answer
-
-    def accepted(self) -> bool:
-        return False
-
-    def __str__(self):
-        return "WA"
+    answer: Any
+    # TODO: add correct answer to result, remove logging statements in problems
 
     def __repr__(self):
         return f"<WA> Wrong answer: got {str(self.answer)}"
 
 
+@dataclass
 class RuntimeError(Result):
-    def __init__(self, error: str):
-        self.error = error
-
-    def accepted(self) -> bool:
-        return False
-
-    def __str__(self):
-        return "RE"
+    error: str
 
     def __repr__(self):
         return f"<RE> Runtime error: {self.error}"
 
 
+@dataclass
 class TimeLimitExceeded(Result):
-    def accepted(self) -> bool:
-        return False
-
-    def __str__(self):
-        return "TLE"
-
     def __repr__(self):
         return "<TLE> Time Limit Exceeded"
 
 
+@dataclass
 class LLMUsageLimitExceeded(Result):
-    def accepted(self) -> bool:
-        return False
-
-    def __str__(self):
-        return f"LULE"
-
     def __repr__(self):
         return "<LULE> LLM Usage Limit Exceeded"

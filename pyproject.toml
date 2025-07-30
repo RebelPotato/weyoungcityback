@@ -5,14 +5,17 @@ description = "Eval backend for weyoung city competition"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "colorama>=0.4.6",
     "docker>=7.1.0",
     "openai>=1.72.0",
     "opencv-python>=4.11.0.86",
     "psycopg[binary]>=3.2.9",
-    "snoop>=0.6.0",
     "sshtunnel>=0.4.0",
     "trio>=0.30.0",
 ]
 
 [tool.uv]
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
+dev-dependencies = [
+    "snoop>=0.6.0",
+]

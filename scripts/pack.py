@@ -1,5 +1,11 @@
 FILES = [
+    "README.md",
+    "pyproject.toml",
+    ".python-version",
+    "uv.lock",
+    "requirements.txt",
     "local_judge.py",
+    "judge.py",
     "common.py",
     "eval.py",
     "problem0/__init__.py",

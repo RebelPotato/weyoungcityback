@@ -1,22 +1,114 @@
-# judge a problem locally. This is sent to the contestant to judge their answer.
+import judge
+import data
+import math
+import logging
+import warnings
 import trio
+import openai
+import os
+import json
+from dataclasses import dataclass
+from contextlib import asynccontextmanager
+from colorama import Fore, Back, Style, just_fix_windows_console
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(encoding="utf-8", level=logging.INFO)
+warnings.filterwarnings("error")
+CHARS = [" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"]
 
 
-def it():
-    yield None
-    return 2
+def bar(value: float, max_width: int) -> str:
+    n = len(CHARS)
+    value = max(0, min(value, 1))
+    length = math.floor(value * max_width * n)
+    return CHARS[-1] * (length // n) + CHARS[length % n]
+
+
+RESULT_TYPES = [
+    data.Accepted,
+    data.WrongAnswer,
+    data.RuntimeError,
+    data.TimeLimitExceeded,
+    data.LLMUsageLimitExceeded,
+]
+NAMES = [
+    "  AC",
+    "  WA",
+    "  RE",
+    " TLE",
+    "LULE",
+]
+COLORS = [
+    Fore.GREEN,
+    Fore.RED,
+    Fore.LIGHTMAGENTA_EX,
+    Fore.YELLOW,
+    Fore.LIGHTYELLOW_EX,
+]
+
+
+async def slurp(path: str) -> bytes:
+    async with await trio.open_file(path, "rb") as f:
+        return await f.read()
+
+
+async def barf(path: str, data: bytes):
+    async with await trio.open_file(path, "wb") as f:
+        await f.write(data)
+
+
+class Results(judge.Results):
+    def log(self):
+        logger.info(
+            f"Accuracy: {self.accuracy():.2f}% [{self.count[data.Accepted]}/{self.total}]"
+        )
+        for c, name, color in zip(RESULT_TYPES, NAMES, COLORS):
+            count = self.count.get(c, 0)
+            accuracy = count / self.total if self.total > 0 else 0.0
+            print(
+                f"{color}{name} [{accuracy:06.2%}] {bar(accuracy, 40)}{Style.RESET_ALL}"
+                f" {count}/{self.total}"
+            )
+
+
+@asynccontextmanager
+async def task_process():
+    async with trio.open_nursery() as nursery:
+        logger.info("trio: process for eval.py spawned")
+        process = await nursery.start(
+            trio.run_process,
+            ["uv", "run", "eval.py"],
+        )
+        yield process
+        nursery.cancel_scope.cancel()
+    logger.info("trio: eval.py stopped")
+
+
+@dataclass
+class Keys:
+    api_key: str
+    base_url: str
 
 
 async def main():
-    proc = it()
-    proc.send(None)  # start the generator
-    try:
-        await trio.to_thread.run_sync(proc.send, None)
-    except RuntimeError as e:
-        assert isinstance(e.__cause__, StopIteration)
-        print("Stop Iteration catched!", e.__cause__.value)
-    except StopIteration as e:
-        print("Stop Iteration catched natively!", e.value)
+    just_fix_windows_console()
+    with open("key.json", "r") as f:
+        d = json.load(f)
+        keys = Keys(api_key=d["api_key"], base_url=d["base_url"])
+    openai_client = openai.AsyncOpenAI(
+        api_key=keys.api_key,
+        base_url=keys.base_url,
+    )
+    problem_id = "1"
+    loader = judge.LOADERS[problem_id]
+    await barf("answer.py", await slurp(os.path.join(loader.path(), "answer_std.py")))
+    await barf(
+        "answer_zero.py", await slurp(os.path.join(loader.path(), "answer_zero.py"))
+    )
+    results = Results()
+    async with task_process():
+        await judge.judge_problem(openai_client, loader, results)
 
 
-trio.run(main)
+if __name__ == "__main__":
+    trio.run(main)
