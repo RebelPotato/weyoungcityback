@@ -1,15 +1,15 @@
 import math
 from typing import List, Generator, Any
 import json
+import common
 
 
 def complete(model, messages, **kwargs):
-    return {
-        "action": "complete",
-        "model": model,
-        "messages": messages,
-        "kwargs": kwargs,
-    }
+    return common.CompleteAction(
+        model=model,
+        messages=messages,
+        kwargs=kwargs,
+    )
 
 
 prompt = """
@@ -28,7 +28,9 @@ Output your answer in json format, with the following template:
 """
 
 
-def query(question: str, base64_frames: List[str]) -> Generator[dict, Any, str]:
+def query(
+    question: str, base64_frames: List[str]
+) -> Generator[common.Action, Any, str]:
     filled_prompt = prompt.format(question=question)
 
     div_num = max(math.ceil(len(base64_frames) / 16), 1)

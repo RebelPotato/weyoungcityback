@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Generator, Iterable, TypedDict, Any
+from typing import List
+import common
 
 
 class Result(ABC):
@@ -7,11 +8,13 @@ class Result(ABC):
     def accepted(self) -> bool:
         pass
 
+    @abstractmethod
+    def __str__(self) -> str:
+        pass
 
-class QuestionStart(TypedDict):
-    question_id: int
-    timeout: float
-    kwargs: dict[str, Any]
+    @abstractmethod
+    def __repr__(self) -> str:
+        pass
 
 
 class Question(ABC):
@@ -22,7 +25,7 @@ class Question(ABC):
     id: int
 
     @abstractmethod
-    def start(self) -> QuestionStart:
+    def start(self) -> common.StartReq:
         pass
 
     @abstractmethod
@@ -43,7 +46,7 @@ class Loader(ABC):
         pass
 
     @abstractmethod
-    def load(self) -> Iterable[Question]:
+    def load(self) -> List[Question]:
         pass
 
 
@@ -54,6 +57,9 @@ class Accepted(Result):
     def __str__(self):
         return "AC"
 
+    def __repr__(self):
+        return "<AC> Accepted"
+
 
 class WrongAnswer(Result):
     def __init__(self, answer: any):
@@ -63,7 +69,10 @@ class WrongAnswer(Result):
         return False
 
     def __str__(self):
-        return f"WA: {str(self.answer)}"
+        return "WA"
+
+    def __repr__(self):
+        return f"<WA> Wrong answer: got {str(self.answer)}"
 
 
 class RuntimeError(Result):
@@ -74,7 +83,10 @@ class RuntimeError(Result):
         return False
 
     def __str__(self):
-        return f"RE: {self.error}"
+        return "RE"
+
+    def __repr__(self):
+        return f"<RE> Runtime error: {self.error}"
 
 
 class TimeLimitExceeded(Result):
@@ -84,6 +96,9 @@ class TimeLimitExceeded(Result):
     def __str__(self):
         return "TLE"
 
+    def __repr__(self):
+        return "<TLE> Time Limit Exceeded"
+
 
 class LLMUseLimitExceeded(Result):
     def accepted(self) -> bool:
@@ -91,3 +106,6 @@ class LLMUseLimitExceeded(Result):
 
     def __str__(self):
         return f"LULE"
+
+    def __repr__(self):
+        return "<LULE> LLM Use Limit Exceeded"

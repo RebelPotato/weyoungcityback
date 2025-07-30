@@ -6,6 +6,7 @@ from typing import List
 import json
 import os
 import data
+import common
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
@@ -40,10 +41,10 @@ class Question(data.Question):
         self.question = question
         self.answer = answer
 
-    def start(self) -> data.QuestionStart:
+    def start(self) -> common.StartReq:
         base64_frames = read_video(self.video_path)
         logger.info(f"[{self.id}]{len(base64_frames)} frames read.")
-        return data.QuestionStart(
+        return common.StartReq(
             timeout=1.0,
             question_id=self.id,
             kwargs={

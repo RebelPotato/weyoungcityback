@@ -8,6 +8,7 @@ import openai
 import trio
 import docker
 from typing import TypedDict, Dict
+from functools import singledispatch
 from contextlib import asynccontextmanager
 import sshtunnel
 import psycopg
@@ -42,68 +43,78 @@ async def judge_question(
     Asynchronously judge a question.
     """
 
-    async def collect_error(e: str):
-        if e == "Time Limit Exceeded":
-            logger.info(f"[{question.id}]<TLE> {e}")
-            await collect_send_chan.send(data.TimeLimitExceeded())
-            return
-        logger.info(f"[{question.id}]<RE> {e}")
-        await collect_send_chan.send(data.RuntimeError(e))
+    async def send_result(result: data.Result):
+        logger.info(f"[{question.id}]{repr(result)}")
+        await collect_send_chan.send(result)
 
-    async def send_receive(data: dict):
-        await eval_send_chan.send(data)
-        status = await response_recv_chan.receive()
-        if status["status"] == "error":
-            await collect_error(status["exception"])
-            return None
-        return status
+    def result_err(e: str) -> data.Result:
+        return (
+            data.TimeLimitExceeded()
+            if e == "Time Limit Exceeded"
+            else data.RuntimeError(e)
+        )
+
+    value = None
+    llm_calls = 0
+
+    @singledispatch
+    async def perform(action: common.Action | None) -> data.Result | None:
+        raise ValueError(f"Unknown action: {type(action)}")
+
+    @perform.register
+    async def _(action: None):
+        return None
+
+    @perform.register
+    async def _(action: common.CompleteAction):
+        nonlocal llm_calls
+        nonlocal client
+        nonlocal value
+        try:
+            value = await client.chat.completions.create(
+                model=action.model,
+                messages=action.messages,
+                **action.kwargs,
+            )
+            llm_calls += 1
+        except Exception as e:
+            return result_err(repr(e))
+
+    @singledispatch
+    async def handle_response(response: common.Response) -> data.Result | None:
+        raise ValueError(f"Unknown response: {type(response)}")
+
+    @handle_response.register
+    async def _(response: common.OkRes):
+        return await perform(response.value)
+
+    @handle_response.register
+    async def _(response: common.ErrRes):
+        return result_err(response.exception)
+
+    @handle_response.register
+    async def _(response: common.DoneRes):
+        return question.judge(response.value)
+
+    async def send_receive(data: common.Request) -> common.Response:
+        await eval_send_chan.send(data.dump())
+        b = await response_recv_chan.receive()
+        return common.Response.load(b)
 
     async with WORKER_LIMITER, collect_send_chan, eval_send_chan, response_recv_chan:
-        response = None
-        llm_calls = 0
-        start_dict = question.start()
-        start_dict["type"] = "start"
-        status = await send_receive(start_dict)
-        if status is None:
+        response = await send_receive(question.start())
+        if isinstance(response, common.ErrRes):
+            await send_result(result_err(response.exception))
             return
         while llm_calls < 10:
-            status = await send_receive(
-                {
-                    "type": "continue",
-                    "question_id": question.id,
-                    "response": response,
-                }
+            response = await send_receive(
+                common.ContinueReq(question_id=question.id, value=value)
             )
-            if status is None:
+            result = await handle_response(response)
+            if result != None:
+                await send_result(result)
                 return
-            if status["status"] == "ok":
-                action = status["value"]
-                match action["action"]:
-                    case "complete":
-                        try:
-                            response = await client.chat.completions.create(
-                                model=action["model"],
-                                messages=action["messages"],
-                                **action["kwargs"],
-                            )
-                            llm_calls += 1
-                        except Exception as e:
-                            logger.error(f"[{question.id}]<RE> LLM Error: {e}")
-                            await collect_error(str(e))
-                            return
-                    case _:
-                        e = f"Unknown action: {action}"
-                        logger.error(f"[{question.id}]<RE> {e}")
-                        await collect_error(e)
-                        return
-            elif status["status"] == "done":
-                await collect_send_chan.send(question.judge(status["value"]))
-                return
-            else:
-                # Unknown status, bug in the server. The only valid option is to crash.
-                raise ValueError(f"Unknown status: {status['status']}")
-        logger.info(f"[{question.id}]<LULE> LLM Use Limit Exceeded")
-        await collect_send_chan.send(data.LLMUseLimitExceeded())
+        await send_result(data.LLMUseLimitExceeded())
 
 
 async def socket_sender(
@@ -113,7 +124,7 @@ async def socket_sender(
     logger.info("sender: started")
     async with eval_recv_chan:
         async for data in eval_recv_chan:
-            await common.write_data(data, client_stream)
+            await common.write_bytes(data, client_stream)
     logger.info("sender: no data left to send, exiting...")
 
 
@@ -124,7 +135,7 @@ async def socket_receiver(
     logger.info("receiver: started")
     async with response_send_chan:
         while True:
-            data = await common.read_data(client_stream)
+            data = await common.read_bytes(client_stream)
             if data is None:
                 logger.info("receiver: received None, exiting...")
                 return

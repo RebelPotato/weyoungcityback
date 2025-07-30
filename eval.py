@@ -1,8 +1,7 @@
 import trio
 import logging
 import warnings
-from functools import partial
-from typing import Dict, Any
+from functools import partial, singledispatch
 import common
 
 try:
@@ -19,23 +18,20 @@ time_left = {}
 executor = None
 
 
-async def run_task(id: int, func: callable) -> Dict[str, Any]:
+async def run_task(id: int, func: callable) -> common.Response:
     def done(e: StopIteration):
-        logger.info(f"Task {id} completed successfully.")
+        logger.info(f"Task {id} completed successfully")
         time_left[id] -= trio.current_time() - now
-        return {"status": "done", "value": e.value}
+        return common.DoneRes(value=e.value)
 
     def error(e: Exception):
         logger.error(f"Task {id} raised an exception: {e}")
-        return {
-            "status": "error",
-            "exception": str(e),
-        }
+        return common.ErrRes(exception=repr(e))
 
     now = trio.current_time()
     with trio.move_on_after(time_left[id]) as cancel_scope:
         try:
-            logger.info(f"Task {id} run with time limit {time_left[id]} seconds.")
+            logger.info(f"Task {id} started with {time_left[id]} seconds left")
             result = await trio.to_thread.run_sync(func, abandon_on_cancel=True)
         except RuntimeError as e:
             # A StopIteration exception should be converted to a RuntimeError when caught.
@@ -47,79 +43,69 @@ async def run_task(id: int, func: callable) -> Dict[str, Any]:
             return done(e)
         except Exception as e:
             return error(e)
+
     if cancel_scope.cancelled_caught:
-        logger.info(f"Task {id} time limit exceeded.")
-        return {
-            "status": "error",
-            "exception": "Time Limit Exceeded",
-        }
+        logger.info(f"Task {id} time limit exceeded")
+        return common.ErrRes(exception="Time Limit Exceeded")
+
+    logger.info(f"Task {id} yielded.")
     time_left[id] -= trio.current_time() - now
-    return {
-        "status": "ok",
-        "value": result,
-    }
+    return common.OkRes(value=result)
 
 
-async def process(data: dict) -> dict:
-    def send_error(exception: str):
-        return {"status": "error", "exception": exception}
+@singledispatch
+async def process(data: common.Request) -> common.Response:
+    raise ValueError(f"Unknown request type: {data}")
 
-    id = data["question_id"]
-    match data["type"]:
-        case "start":
-            if not (id in running):
-                running[id] = None
-                time_left[id] = data["timeout"]
-                result = await run_task(id, partial(ans.query, **data["kwargs"]))
-                match result["status"]:
-                    case "ok":
-                        running[id] = result["value"]
-                        return {"status": "ok"}
-                    case "error":
-                        del running[id]
-                        del time_left[id]
-                        return send_error(result["exception"])
-                    case "done":
-                        del running[id]
-                        del time_left[id]
-                        return send_error("Task completed unexpectedly")
-            else:
-                # protocol error
-                raise ValueError(f"Task {id} is already running")
 
-        case "continue":
-            if id in running:
-                process = running[id]
-                result = await run_task(id, partial(process.send, data["response"]))
-                match result["status"]:
-                    case "ok":
-                        return {"status": "ok", "value": result["value"]}
-                    case "error":
-                        del running[id]
-                        del time_left[id]
-                        return send_error(result["exception"])
-                    case "done":
-                        del running[id]
-                        del time_left[id]
-                        return {"status": "done", "value": result["value"]}
-            else:
-                # protocol error
-                raise ValueError(f"Task {id} is not running")
-        case _:
-            # protocol error
-            raise ValueError(f"Unknown data type: {data}")
+@process.register
+async def _(data: common.StartReq) -> common.Response:
+    id = data.question_id
+    if id in running:
+        raise ValueError(f"Task {id} is already running")
+
+    running[id] = None
+    time_left[id] = data.timeout
+    result = await run_task(id, partial(ans.query, **data.kwargs))
+    if isinstance(result, common.OkRes):
+        running[id] = result.value
+        return common.OkRes(value=None)
+    else:
+        del running[id]
+        del time_left[id]
+        return (
+            result
+            if isinstance(result, common.ErrRes)
+            else common.ErrRes(exception="Task completed unexpectedly")
+        )
+
+
+@process.register
+async def _(data: common.ContinueReq) -> common.Response:
+    id = data.question_id
+    if not (id in running):
+        raise ValueError(f"Task {id} is not running")
+
+    process = running[id]
+    result = await run_task(id, partial(process.send, data.value))
+    if isinstance(result, common.OkRes):
+        return result
+    else:
+        del running[id]
+        del time_left[id]
+        return result
 
 
 async def eval_server(server_stream: trio.SocketStream):
     while True:
-        data = await common.read_data(server_stream)
-        if data is None:
+        b = await common.read_bytes(server_stream)
+        if b is None:
             logger.info(f"eval: eval complete! exiting...")
             await server_stream.aclose()
             return
 
-        result = await process(data)
-        await common.write_data(result, server_stream)
+        result = await process(common.Request.load(b))
+        await common.write_bytes(result.dump(), server_stream)
 
 
 async def main():
