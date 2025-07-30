@@ -11,6 +11,7 @@ from typing import TypedDict, Dict
 from functools import singledispatch
 from contextlib import asynccontextmanager
 from colorama import just_fix_windows_console
+import httpx
 import sshtunnel
 import psycopg
 
@@ -165,7 +166,7 @@ class Results:
 
     def log(self):
         logger.info(
-            f"Accuracy: {self.accuracy():.2f}% [{self.count[data.Accepted]}/{self.total}]"
+            f"Accuracy: {self.accuracy():.2%} [{self.count[data.Accepted]}/{self.total}]"
         )
 
 
@@ -237,7 +238,7 @@ async def task_container(docker_client: docker.DockerClient, loader: data.Loader
 async def judge_problem(
     openai_client: openai.AsyncOpenAI, loader: data.Loader, results: Results
 ):
-    async with (trio.open_nursery() as task_nursery,):
+    async with trio.open_nursery() as task_nursery:
         judged_stream = await trio.open_tcp_stream("127.0.0.1", common.PORT)
         eval_send_chan, eval_recv_chan = trio.open_memory_channel[bytes](0)
         response_send_chan, response_recv_chan = trio.open_memory_channel[bytes](0)
@@ -279,59 +280,63 @@ async def judge_problem(
 async def main():
     just_fix_windows_console()
     keys = get_keys()
-    openai_client = openai.AsyncOpenAI(
-        api_key=keys["api_key"],
-        base_url=keys["base_url"],
-    )
     docker_client = docker.from_env()
 
-    with sshtunnel.SSHTunnelForwarder(
-        "81.70.133.142",
-        ssh_username=keys["ssh_username"],
-        ssh_password=keys["ssh_password"],
-        remote_bind_address=("localhost", 5432),
-    ) as tunnel:
-        assert tunnel is not None, "SSH tunnel failed to start"
-        tunnel.start()
-        logger.info("SSH tunnel started")
-        with (
-            psycopg.connect(
-                f"host=localhost hostaddr=127.0.0.1 "
-                f"dbname={keys['pg_database']} "
-                f"user={keys['pg_user']} "
-                f"password={keys['pg_password']} "
-                f"port={tunnel.local_bind_port}"
-            ) as conn,
-            conn.cursor() as cur,
-        ):
-            logger.info("PostgreSQL connection established")
-            while True:
-                cur.execute(
-                    "SELECT id, problemID, code FROM submissions WHERE score = 0 ORDER BY submitted_at LIMIT 1"
-                )
-                row = cur.fetchone()
-                if row is None:
-                    await trio.sleep(5)
-                    continue
-                submission_id, problem_id, code = row
-                # code = code.replace("\r\n", "\n")  # Normalize line endings. TODO: is this needed?
-                async with await trio.open_file("answer.py", "wb") as f:
-                    await f.write(code)
-                logger.info(f"Submission {submission_id} loaded")
+    async with httpx.AsyncClient() as client:
+        openai_client = openai.AsyncOpenAI(
+            api_key=keys["api_key"],
+            base_url=keys["base_url"],
+            http_client=client,
+        )
+        with sshtunnel.SSHTunnelForwarder(
+            "81.70.133.142",
+            ssh_username=keys["ssh_username"],
+            ssh_password=keys["ssh_password"],
+            remote_bind_address=("localhost", 5432),
+        ) as tunnel:
+            assert tunnel is not None, "SSH tunnel failed to start"
+            tunnel.start()
+            logger.info("SSH tunnel started")
+            with (
+                psycopg.connect(
+                    f"host=localhost hostaddr=127.0.0.1 "
+                    f"dbname={keys['pg_database']} "
+                    f"user={keys['pg_user']} "
+                    f"password={keys['pg_password']} "
+                    f"port={tunnel.local_bind_port}"
+                ) as conn,
+                conn.cursor() as cur,
+            ):
+                logger.info("PostgreSQL connection established")
+                while True:
+                    cur.execute(
+                        "SELECT id, problemID, code FROM submissions WHERE score = 0 ORDER BY submitted_at LIMIT 1"
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        await trio.sleep(5)
+                        continue
+                    submission_id, problem_id, code = row
+                    # code = code.replace("\r\n", "\n")  # Normalize line endings. TODO: is this needed?
+                    async with await trio.open_file("answer.py", "wb") as f:
+                        await f.write(code)
+                    logger.info(f"Submission {submission_id} loaded")
 
-                loader = LOADERS[problem_id]
-                results = Results()
-                async with task_container(docker_client, loader):
-                    await judge_problem(openai_client, loader, results)
-                score = results.score()
+                    loader = LOADERS[problem_id]
+                    results = Results()
+                    async with task_container(docker_client, loader):
+                        await judge_problem(openai_client, loader, results)
+                    score = results.score()
 
-                logger.info(f"Writing {submission_id} to database ...")
-                cur.execute(
-                    "UPDATE submissions SET score = %s WHERE id = %s",
-                    (score, submission_id),
-                )
-                conn.commit()
-                logger.info(f"Submission {submission_id} updated with score {score}")
+                    logger.info(f"Writing {submission_id} to database ...")
+                    cur.execute(
+                        "UPDATE submissions SET score = %s WHERE id = %s",
+                        (score, submission_id),
+                    )
+                    conn.commit()
+                    logger.info(
+                        f"Submission {submission_id} updated with score {score}"
+                    )
 
 
 if __name__ == "__main__":

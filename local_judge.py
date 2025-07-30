@@ -7,6 +7,7 @@ import trio
 import openai
 import os
 import json
+import httpx
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from colorama import Fore, Back, Style, just_fix_windows_console
@@ -59,9 +60,6 @@ async def barf(path: str, data: bytes):
 
 class Results(judge.Results):
     def log(self):
-        logger.info(
-            f"Accuracy: {self.accuracy():.2f}% [{self.count[data.Accepted]}/{self.total}]"
-        )
         for c, name, color in zip(RESULT_TYPES, NAMES, COLORS):
             count = self.count.get(c, 0)
             accuracy = count / self.total if self.total > 0 else 0.0
@@ -95,18 +93,18 @@ async def main():
     with open("key.json", "r") as f:
         d = json.load(f)
         keys = Keys(api_key=d["api_key"], base_url=d["base_url"])
-    openai_client = openai.AsyncOpenAI(
-        api_key=keys.api_key,
-        base_url=keys.base_url,
-    )
-    problem_id = "1"
+
+    problem_id = "0"
     loader = judge.LOADERS[problem_id]
     await barf("answer.py", await slurp(os.path.join(loader.path(), "answer_std.py")))
     await barf(
         "answer_zero.py", await slurp(os.path.join(loader.path(), "answer_zero.py"))
     )
     results = Results()
-    async with task_process():
+    async with httpx.AsyncClient() as client, task_process():
+        openai_client = openai.AsyncOpenAI(
+            api_key=keys.api_key, base_url=keys.base_url, http_client=client
+        )
         await judge.judge_problem(openai_client, loader, results)
 
 
