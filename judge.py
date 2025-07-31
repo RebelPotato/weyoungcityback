@@ -317,7 +317,7 @@ async def main():
                         await trio.sleep(5)
                         continue
                     submission_id, problem_id, code = row
-                    # code = code.replace("\r\n", "\n")  # Normalize line endings. TODO: is this needed?
+                    # code = code.replace("\r\n", "\n")  # Normalize line endings. TODO: is this necessary?
                     async with await trio.open_file("answer.py", "wb") as f:
                         await f.write(code)
                     logger.info(f"Submission {submission_id} loaded")

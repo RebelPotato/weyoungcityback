@@ -14,10 +14,10 @@ FILES = [
     "data.py",
     "eval.py",
     "problem0/__init__.py",
-    "problem0/answer_std.py",
+    "problem0/answer.py",
     "problem0/answer_zero.py",
     "problem1/__init__.py",
-    "problem1/answer_std.py",
+    "problem1/answer.py",
     "problem1/answer_zero.py",
 ]
 

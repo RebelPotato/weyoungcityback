@@ -96,7 +96,7 @@ async def main():
 
     problem_id = "0"
     loader = judge.LOADERS[problem_id]
-    await barf("answer.py", await slurp(os.path.join(loader.path(), "answer_std.py")))
+    await barf("answer.py", await slurp(os.path.join(loader.path(), "answer.py")))
     await barf(
         "answer_zero.py", await slurp(os.path.join(loader.path(), "answer_zero.py"))
     )
