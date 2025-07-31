@@ -39,13 +39,6 @@ NAMES = [
     " TLE",
     "LULE",
 ]
-COLORS = [
-    Fore.GREEN,
-    Fore.RED,
-    Fore.LIGHTMAGENTA_EX,
-    Fore.YELLOW,
-    Fore.LIGHTYELLOW_EX,
-]
 
 
 async def slurp(path: str) -> bytes:
@@ -60,11 +53,11 @@ async def barf(path: str, data: bytes):
 
 class Results(judge.Results):
     def log(self):
-        for c, name, color in zip(RESULT_TYPES, NAMES, COLORS):
+        for c, name in zip(RESULT_TYPES, NAMES):
             count = self.count.get(c, 0)
             accuracy = count / self.total if self.total > 0 else 0.0
             print(
-                f"{color}{name} [{accuracy:06.2%}] {bar(accuracy, 40)}{Style.RESET_ALL}"
+                f"{c.color}{name} [{accuracy:06.2%}] {bar(accuracy, 40)}{Style.RESET_ALL}"
                 f" {count}/{self.total}"
             )
 

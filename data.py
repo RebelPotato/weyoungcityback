@@ -46,34 +46,45 @@ class Loader(ABC):
 
 @dataclass
 class Accepted(Result):
+    color = Fore.GREEN
+    answer: Any
+
     def __repr__(self):
-        return "<AC> Accepted"
+        return f"{Accepted.color}<AC> Accepted{Fore.RESET}: choice = answer = {self.answer}"
 
 
 @dataclass
 class WrongAnswer(Result):
+    color = Fore.RED
+    choice: Any
     answer: Any
-    # TODO: add correct answer to result, remove logging statements in problems
 
     def __repr__(self):
-        return f"<WA> Wrong answer: got {str(self.answer)}"
+        return f"{WrongAnswer.color}<WA> Wrong answer{Fore.RESET}: choice/answer = {self.choice}/{self.answer}"
 
 
 @dataclass
 class RuntimeError(Result):
+    color = Fore.LIGHTMAGENTA_EX
     error: str
 
     def __repr__(self):
-        return f"<RE> Runtime error: {self.error}"
+        return f"{RuntimeError.color}<RE> Runtime error{Fore.RESET}: {self.error}"
 
 
 @dataclass
 class TimeLimitExceeded(Result):
+    color = Fore.YELLOW
+
     def __repr__(self):
-        return "<TLE> Time Limit Exceeded"
+        return f"{TimeLimitExceeded.color}<TLE> Time Limit Exceeded{Fore.RESET}"
 
 
 @dataclass
 class LLMUsageLimitExceeded(Result):
+    color = Fore.LIGHTYELLOW_EX
+
     def __repr__(self):
-        return "<LULE> LLM Usage Limit Exceeded"
+        return (
+            f"{LLMUsageLimitExceeded.color}<LULE> LLM Usage Limit Exceeded{Fore.RESET}"
+        )

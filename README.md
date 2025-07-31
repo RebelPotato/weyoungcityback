@@ -22,7 +22,9 @@ pip install -e .                  # install dependencies and packages (each prob
 .\.venv\Scripts\python.exe local_judge.py
 ```
 
-Linux 同样操作。
+Linux 操作大概类似吧。
+
+做每个问题，在它对应的文件夹下修改 answer.py，最后提交的也是这个文件。
 
 ## 文件说明
 

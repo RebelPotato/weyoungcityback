@@ -3,6 +3,7 @@ import warnings
 import logging
 import cv2
 from typing import List
+from dataclasses import dataclass
 import json
 import os
 import data
@@ -30,16 +31,16 @@ def read_video(video_path: str) -> List[str]:
     return base64_frames
 
 
+@dataclass
 class Question(data.Question):
     """
     A Single question for problem 1.
     """
 
-    def __init__(self, id: int, video_path: str, question: str, answer: str):
-        self.id = id
-        self.video_path = video_path
-        self.question = question
-        self.answer = answer
+    id: int
+    video_path: str
+    question: str
+    answer: str
 
     def start(self) -> common.StartReq:
         base64_frames = read_video(self.video_path)
@@ -54,11 +55,11 @@ class Question(data.Question):
         )
 
     def judge(self, choice: str) -> data.Result:
-        verdict = data.Accepted() if choice == self.answer else data.WrongAnswer(choice)
-        logger.info(
-            f"[{self.id}]<{str(verdict)}> Output/Answer: {choice}/{self.answer}"
+        return (
+            data.Accepted(self.answer)
+            if choice == self.answer
+            else data.WrongAnswer(choice=choice, answer=self.answer)
         )
-        return verdict
 
 
 class Loader(data.Loader):

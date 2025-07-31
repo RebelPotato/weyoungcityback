@@ -3,6 +3,7 @@ import warnings
 import logging
 import cv2
 from typing import List
+from dataclasses import dataclass
 import json
 import os
 import data
@@ -20,19 +21,17 @@ def read_image(image_path: str) -> str:
     return base64.b64encode(buffer).decode("utf-8")  # type: ignore
 
 
+@dataclass
 class Question(data.Question):
     """
     A Single question for problem 0.
     """
 
-    def __init__(
-        self, id: int, image_path: str, question: str, choices: List[str], answer: str
-    ):
-        self.id = id
-        self.image_path = image_path
-        self.question = question
-        self.choices = choices
-        self.answer = answer
+    id: int
+    image_path: str
+    question: str
+    choices: List[str]
+    answer: str
 
     def start(self) -> common.StartReq:
         base64_image = read_image(self.image_path)
@@ -48,11 +47,11 @@ class Question(data.Question):
         )
 
     def judge(self, choice: str) -> data.Result:
-        verdict = data.Accepted() if choice == self.answer else data.WrongAnswer(choice)
-        logger.info(
-            f"[{self.id}]<{str(verdict)}> Output/Answer: {choice}/{self.answer}"
+        return (
+            data.Accepted(self.answer)
+            if choice == self.answer
+            else data.WrongAnswer(choice=choice, answer=self.answer)
         )
-        return verdict
 
 
 class Loader(data.Loader):
