@@ -68,7 +68,7 @@ class Results(judge.Results):
 async def task_process():
     python_exec = ".venv/Scripts/python" if os.name == "nt" else ".venv/bin/python"
     async with trio.open_nursery() as nursery:
-        logger.info("trio: process for eval.py spawned")
+        logger.info("process for eval.py spawned")
         process = await nursery.start(
             trio.run_process,
             [python_exec, "eval.py"],

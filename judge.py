@@ -19,7 +19,7 @@ import problem0
 import problem1
 
 
-WORKER_COUNT = 12
+WORKER_COUNT = 24
 WORKER_LIMITER = trio.CapacityLimiter(WORKER_COUNT)
 
 PROBLEM_IDS = {
@@ -159,14 +159,14 @@ class Results:
     def accuracy(self) -> float:
         if self.total == 0:
             return 0.0
-        return self.count[data.Accepted] / self.total
+        return self.count.get(data.Accepted, 0) / self.total
 
     def score(self) -> int:
         return max(1, math.floor(self.accuracy() * 100))
 
     def log(self):
         logger.info(
-            f"Accuracy: {self.accuracy():.2%} [{self.count[data.Accepted]}/{self.total}]"
+            f"Accuracy: {self.accuracy():.2%} [{self.count.get(data.Accepted, 0)}/{self.total}]"
         )
 
 
@@ -188,7 +188,7 @@ async def judge_problem(
     results: Results,
 ):
     async with trio.open_nursery() as task_nursery:
-        judged_stream = await trio.open_tcp_stream("localhost", common.PORT)
+        judged_stream = await trio.open_tcp_stream("127.0.0.1", common.PORT)
         eval_send_chan, eval_recv_chan = trio.open_memory_channel[bytes](0)
         response_send_chan, response_recv_chan = trio.open_memory_channel[bytes](0)
         collect_send_chan, collect_recv_chan = trio.open_memory_channel[data.Result](0)
@@ -238,18 +238,21 @@ class Keys:
 
 async def main():
     import docker
+    import docker.errors
     import sshtunnel
     import psycopg
 
-    # TODO: create docker network for network isolation
-
     @asynccontextmanager
-    async def task_container(docker_client: docker.DockerClient, path: str):
+    async def task_container(
+        docker_client: docker.DockerClient,
+        path: str,
+    ):
         container = docker_client.containers.run(
             "judged",
             detach=True,
             read_only=True,
             remove=os.environ.get("WYCB_DEBUG", "false").lower() != "true",
+            # network="TODO",
             ports={f"{common.PORT}/tcp": common.PORT},
             tmpfs={"/tmp": "rw"},
             volumes={
@@ -276,11 +279,13 @@ async def main():
             await trio.sleep(3)  # wait for the container to be ready
             yield container
         finally:
-            container.stop()
+            try:
+                container.stop()
+            except docker.errors.NotFound:
+                pass
             logger.info("docker: eval stopped")
 
     just_fix_windows_console()
-
     with open("key.json", "r") as f:
         keys = Keys(**json.load(f))
     docker_client = docker.from_env()
@@ -318,9 +323,8 @@ async def main():
                         await trio.sleep(5)
                         continue
                     submission_id, problem_id, code = row
-                    # code = code.replace("\r\n", "\n")  # Normalize line endings. TODO: is this necessary?
                     async with await trio.open_file("answer.py", "wb") as f:
-                        await f.write(code)
+                        await f.write(code.encode("utf-8"))
                     logger.info(f"Submission {submission_id} loaded")
 
                     problem_id = PROBLEM_IDS[problem_id]

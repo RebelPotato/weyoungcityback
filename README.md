@@ -26,12 +26,18 @@ pip install -e .
 
 启动本地评测脚本使用：
 
-```powershell
+```bash
 python local_judge.py
 ```
 
 你的任务是修改 answer.py，使你的分数尽可能高。
 
+## 部署说明
+
+TODO: 在这里描述我们是如何在服务器上运行评测程序的。
+
+TODO: 服务器上需要怎么配置网络？见 <https://stackoverflow.com/a/64464693>，其中出现的几个 ip 是私有的。
+
 ## 文件说明
 
-TODO
+TODO: 每个文件做什么？

@@ -6,14 +6,17 @@ from functools import partial, singledispatch
 from typing import Callable, Any
 import common
 
-try:
-    import answer as ans
-except ImportError:
-    import answer_zero as ans
-
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
 warnings.filterwarnings("error")
+import_error = None
+
+try:
+    import answer as ans
+except Exception as e:
+    logger.error(f"import ans raised an exception: {e}")
+    ans = None
+    import_error = e
 
 running = {}
 time_left = {}
@@ -40,7 +43,7 @@ async def run_task(id: int, func: Callable[[], Any]) -> common.Response:
     with trio.move_on_after(time_left[id] + 0.5) as cancel_scope:
         # add 0.5 seconds to allow for spawning and processing
         try:
-            logger.info(f"Task {id} started with {time_left[id]} seconds left")
+            logger.info(f"Running task {id} with {time_left[id]} seconds left")
             result, elapsed = await trio.to_thread.run_sync(
                 partial(timed, func), abandon_on_cancel=True
             )
@@ -72,12 +75,17 @@ async def process(data: common.Request) -> common.Response:
 @process.register
 async def _(data: common.StartReq) -> common.Response:
     id = data.question_id
+    logger.info(f"Starting task {id} with timeout {data.timeout} seconds")
     if id in running:
         raise ValueError(f"Task {id} is already running")
 
     running[id] = None
     time_left[id] = data.timeout
-    result = await run_task(id, partial(ans.query, **data.kwargs))
+    if ans is None:
+        logger.info(f"Cannot start task {id} because an error occurred during import.")
+        result = common.ErrRes(exception=repr(import_error))
+    else:
+        result = await run_task(id, partial(ans.query, **data.kwargs))
     if isinstance(result, common.OkRes):
         running[id] = result.value
         return common.OkRes(value=None)
@@ -94,6 +102,7 @@ async def _(data: common.StartReq) -> common.Response:
 @process.register
 async def _(data: common.ContinueReq) -> common.Response:
     id = data.question_id
+    logger.info(f"Resuming task {id}")
     if id not in running:
         raise ValueError(f"Task {id} is not running")
 
@@ -108,6 +117,7 @@ async def _(data: common.ContinueReq) -> common.Response:
 
 
 async def eval_server(server_stream: trio.SocketStream):
+    logger.info("eval: started")
     while True:
         b = await common.read_bytes(server_stream)
         if b is None:
@@ -120,7 +130,8 @@ async def eval_server(server_stream: trio.SocketStream):
 
 
 async def main():
-    await trio.serve_tcp(eval_server, common.PORT, host="0.0.0.0")
+    listeners = await trio.open_tcp_listeners(common.PORT)
+    await trio.serve_listeners(eval_server, listeners)
 
 
 trio.run(main)
