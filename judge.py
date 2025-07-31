@@ -6,7 +6,7 @@ import logging
 import time
 import openai
 import trio
-from typing import Dict, Callable, Sequence, List
+from typing import Callable, Sequence, List
 from dataclasses import dataclass
 from functools import singledispatch
 from contextlib import asynccontextmanager
@@ -171,14 +171,21 @@ class Results:
 
 
 async def collector(
-    results: Results, collect_recv_chan: trio.MemoryReceiveChannel[data.Result]
+    results: Results,
+    count: int,
+    collect_recv_chan: trio.MemoryReceiveChannel[data.Result],
 ):
     """Collect results from the results channel."""
     logger.info("collector: started")
-    # TODO add a progress bar or something to show progress
+    i = 0
+    width = 50
     async with collect_recv_chan:
         async for data in collect_recv_chan:
             results.add(data)
+            i += 1
+            logger.info(
+                f"collector: [{i}/{count}|{common.bar(i/count, width).ljust(width)}]"
+            )
     logger.info("collecter: no result left to collect, exiting...")
 
 
@@ -208,7 +215,9 @@ async def judge_problem(
             task_nursery.start_soon(
                 socket_receiver, judged_stream, response_send_chan.clone()
             )
-            task_nursery.start_soon(collector, results, collect_recv_chan.clone())
+            task_nursery.start_soon(
+                collector, results, len(questions), collect_recv_chan.clone()
+            )
             async with trio.open_nursery() as judges_nursery:
                 for question in questions:
                     judges_nursery.start_soon(

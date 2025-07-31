@@ -4,8 +4,27 @@
 
 解压你得到的压缩包，文件夹里会有这些文件：
 
-```text
-TODO
+```plaintext
+weyoungcity.zip
+├── common.py
+├── data.py
+├── eval.py
+├── judge.py
+├── local_judge.py
+├── problem0
+│   ├── answer.py
+│   ├── answer_zero.py
+│   ├── imgs
+│   │   └── [*].png
+│   ├── __init__.py
+│   └── qa_final.json
+├── problem1
+│   ├── answer.py
+│   ├── answer_zero.py
+│   └── __init__.py
+├── pyproject.toml
+├── README.md
+└── uv.lock
 ```
 
 运行评测程序需要先安装 python 环境。推荐把所有包装在一个虚拟环境（venv）里，Windows 系统下如下操作：

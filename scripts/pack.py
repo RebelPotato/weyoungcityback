@@ -8,7 +8,6 @@ FILES = [
     "pyproject.toml",
     ".python-version",
     "uv.lock",
-    "requirements.txt",
     "local_judge.py",
     "judge.py",
     "common.py",

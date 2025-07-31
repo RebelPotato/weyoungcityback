@@ -1,6 +1,7 @@
 import pickle
 import trio
 import abc
+import math
 from dataclasses import dataclass
 from typing import Any, Union
 
@@ -33,6 +34,17 @@ async def read_bytes(stream: trio.SocketStream) -> bytes | None:
         return await receive_exactly(length, stream)
     except trio.ClosedResourceError:
         return None
+
+
+CHARS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"]
+
+
+def bar(progress: float, full_width: int) -> str:
+    """Make a bar with max width `full_width` with a given progress."""
+    n = len(CHARS)
+    progress = max(0, min(progress, 1))
+    length = math.floor(progress * full_width * n)
+    return CHARS[-1] * (length // n) + CHARS[length % n]
 
 
 class Request(abc.ABC):

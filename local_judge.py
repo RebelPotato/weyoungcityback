@@ -1,6 +1,6 @@
 import judge
+import common
 import data
-import math
 import logging
 import warnings
 import trio
@@ -15,15 +15,6 @@ from colorama import Style, just_fix_windows_console
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
 warnings.filterwarnings("error")
-CHARS = [" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"]
-
-
-def bar(progress: float, full_width: int) -> str:
-    """Make a bar with max width `full_width` with a given progress."""
-    n = len(CHARS)
-    progress = max(0, min(progress, 1))
-    length = math.floor(progress * full_width * n)
-    return CHARS[-1] * (length // n) + CHARS[length % n]
 
 
 RESULT_TYPES = [
@@ -59,7 +50,7 @@ class Results(judge.Results):
             count = self.count.get(c, 0)
             accuracy = count / self.total if self.total > 0 else 0.0
             print(
-                f"{c.color}{name} [{accuracy:06.2%}|{bar(accuracy, width).ljust(width)}]{Style.RESET_ALL}"
+                f"{c.color}{name} [{accuracy:06.2%}|{common.bar(accuracy, width).ljust(width)}]{Style.RESET_ALL}"
                 f" {count}/{self.total}"
             )
 
