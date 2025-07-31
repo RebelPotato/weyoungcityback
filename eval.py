@@ -94,7 +94,7 @@ async def _(data: common.StartReq) -> common.Response:
 @process.register
 async def _(data: common.ContinueReq) -> common.Response:
     id = data.question_id
-    if not (id in running):
+    if id not in running:
         raise ValueError(f"Task {id} is not running")
 
     process = running[id]

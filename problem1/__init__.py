@@ -16,14 +16,14 @@ warnings.filterwarnings("error")
 def read_video(video_path: str) -> List[str]:
     video = cv2.VideoCapture(video_path)
 
-    base64_frames = []
+    base64_frames: List[str] = []
     while video.isOpened():
         success, frame = video.read()
         if not success:
             break
         _, buffer = cv2.imencode(".jpg", frame)
         base64_frames.append(
-            f"data:image/jpg;base64,{base64.b64encode(buffer).decode('utf-8')}"
+            f"data:image/jpg;base64,{base64.b64encode(buffer).decode('utf-8')}"  # type: ignore
         )
 
     video.release()

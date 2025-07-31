@@ -17,7 +17,7 @@ def read_image(image_path: str) -> str:
     image = cv2.imread(image_path)
     assert image is not None, f"Cannot read image at {image_path}."
     _, buffer = cv2.imencode(".png", image)
-    return base64.b64encode(buffer).decode("utf-8")
+    return base64.b64encode(buffer).decode("utf-8")  # type: ignore
 
 
 class Question(data.Question):

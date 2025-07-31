@@ -75,7 +75,7 @@ async def task_process():
         logger.info("trio: process for eval.py spawned")
         process = await nursery.start(
             trio.run_process,
-            ["uv", "run", "eval.py"],
+            [".venv/Scripts/python", "eval.py"],
         )
         yield process
         nursery.cancel_scope.cancel()

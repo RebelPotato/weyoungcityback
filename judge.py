@@ -6,14 +6,11 @@ import logging
 import time
 import openai
 import trio
-import docker
 from typing import TypedDict, Dict
 from functools import singledispatch
 from contextlib import asynccontextmanager
 from colorama import just_fix_windows_console
 import httpx
-import sshtunnel
-import psycopg
 
 import data
 import common
@@ -198,43 +195,6 @@ def get_keys() -> Keys:
         return Keys(**json.load(f))
 
 
-@asynccontextmanager
-async def task_container(docker_client: docker.DockerClient, loader: data.Loader):
-    container = docker_client.containers.run(
-        "judged",
-        detach=True,
-        read_only=True,
-        remove=os.environ.get("WYCB_DEBUG", "false").lower() != "true",
-        ports={f"{common.PORT}/tcp": common.PORT},
-        tmpfs={"/tmp": "rw"},
-        volumes={
-            os.path.abspath("eval.py"): {
-                "bind": "/app/eval.py",
-                "mode": "ro",
-            },
-            os.path.abspath("common.py"): {
-                "bind": "/app/common.py",
-                "mode": "ro",
-            },
-            os.path.abspath("answer.py"): {
-                "bind": "/app/answer.py",
-                "mode": "ro",
-            },
-            os.path.join(loader.path(), "answer_zero.py"): {
-                "bind": "/app/answer_zero.py",
-                "mode": "ro",
-            },
-        },
-    )
-    logger.info("docker: container for eval.py spawned")
-    try:
-        await trio.sleep(3)  # wait for the container to be ready
-        yield container
-    finally:
-        container.stop()
-        logger.info("docker: eval stopped")
-
-
 async def judge_problem(
     openai_client: openai.AsyncOpenAI, loader: data.Loader, results: Results
 ):
@@ -278,6 +238,46 @@ async def judge_problem(
 
 
 async def main():
+    import docker
+    import sshtunnel
+    import psycopg
+
+    @asynccontextmanager
+    async def task_container(docker_client: docker.DockerClient, loader: data.Loader):
+        container = docker_client.containers.run(
+            "judged",
+            detach=True,
+            read_only=True,
+            remove=os.environ.get("WYCB_DEBUG", "false").lower() != "true",
+            ports={f"{common.PORT}/tcp": common.PORT},
+            tmpfs={"/tmp": "rw"},
+            volumes={
+                os.path.abspath("eval.py"): {
+                    "bind": "/app/eval.py",
+                    "mode": "ro",
+                },
+                os.path.abspath("common.py"): {
+                    "bind": "/app/common.py",
+                    "mode": "ro",
+                },
+                os.path.abspath("answer.py"): {
+                    "bind": "/app/answer.py",
+                    "mode": "ro",
+                },
+                os.path.join(loader.path(), "answer_zero.py"): {
+                    "bind": "/app/answer_zero.py",
+                    "mode": "ro",
+                },
+            },
+        )
+        logger.info("docker: container for eval.py spawned")
+        try:
+            await trio.sleep(3)  # wait for the container to be ready
+            yield container
+        finally:
+            container.stop()
+            logger.info("docker: eval stopped")
+
     just_fix_windows_console()
     keys = get_keys()
     docker_client = docker.from_env()

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Any
+from typing import Sequence, Any
 import common
 from dataclasses import dataclass
 from colorama import Fore, Back, Style
@@ -23,7 +23,7 @@ class Question(ABC):
         pass
 
     @abstractmethod
-    def judge(self, value: Any) -> Result:
+    def judge(self, choice: Any) -> Result:
         pass
 
 
@@ -40,7 +40,7 @@ class Loader(ABC):
         pass
 
     @abstractmethod
-    def load(self) -> List[Question]:
+    def load(self) -> Sequence[Question]:
         pass
 
 
