@@ -1,6 +1,6 @@
-# 未央城评测东西
+# 未央城评测中心
 
-## 选手使用方法
+## 开始比赛
 
 解压你得到的压缩包，文件夹里会有这些文件：
 
@@ -12,19 +12,25 @@ TODO
 
 ```powershell
 python -m venv .venv              # create venv in folder .venv
-.\.venv\Scripts\activate.ps1      # activate venv
+.\.venv\Scripts\activate.ps1      # activate venv, the next pip comes from .venv
 pip install -e .                  # install dependencies and packages (each problem is a package) from 'pyproject.toml' in editable mode
+```
+
+Linux 下换成：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
 
 启动本地评测脚本使用：
 
 ```powershell
-.\.venv\Scripts\python.exe local_judge.py
+python local_judge.py
 ```
 
-Linux 操作大概类似吧。
-
-做每个问题，在它对应的文件夹下修改 answer.py，最后提交的也是这个文件。
+你的任务是修改 answer.py，使你的分数尽可能高。
 
 ## 文件说明
 
