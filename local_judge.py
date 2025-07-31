@@ -54,23 +54,26 @@ async def barf(path: str, data: bytes):
 
 class Results(judge.Results):
     def log(self):
+        width = 50
         for c, name in zip(RESULT_TYPES, NAMES):
             count = self.count.get(c, 0)
             accuracy = count / self.total if self.total > 0 else 0.0
             print(
-                f"{c.color}{name} [{accuracy:06.2%}] {bar(accuracy, 40)}{Style.RESET_ALL}"
+                f"{c.color}{name} [{accuracy:06.2%}|{bar(accuracy, width).ljust(width)}]{Style.RESET_ALL}"
                 f" {count}/{self.total}"
             )
 
 
 @asynccontextmanager
 async def task_process():
+    python_exec = ".venv/Scripts/python" if os.name == "nt" else ".venv/bin/python"
     async with trio.open_nursery() as nursery:
         logger.info("trio: process for eval.py spawned")
         process = await nursery.start(
             trio.run_process,
-            [".venv/Scripts/python", "eval.py"],
+            [python_exec, "eval.py"],
         )
+        await trio.sleep(3)  # give eval.py some time to start.
         yield process
         nursery.cancel_scope.cancel()
     logger.info("trio: eval.py stopped")

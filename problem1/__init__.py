@@ -68,6 +68,7 @@ class Loader(data.Loader):
     """
 
     def path(self) -> str:
+        # TODO use __file__
         return os.path.abspath("./problem1")
 
     def load(self) -> List[Question]:

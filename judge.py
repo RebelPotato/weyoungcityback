@@ -6,7 +6,7 @@ import logging
 import time
 import openai
 import trio
-from typing import TypedDict, Dict
+from typing import Dict
 from dataclasses import dataclass
 from functools import singledispatch
 from contextlib import asynccontextmanager
@@ -174,6 +174,7 @@ async def collector(
 ):
     """Collect results from the results channel."""
     logger.info("collector: started")
+    # TODO add a progress bar or something to show progress
     async with collect_recv_chan:
         async for data in collect_recv_chan:
             results.add(data)
@@ -184,7 +185,7 @@ async def judge_problem(
     openai_client: openai.AsyncOpenAI, loader: data.Loader, results: Results
 ):
     async with trio.open_nursery() as task_nursery:
-        judged_stream = await trio.open_tcp_stream("127.0.0.1", common.PORT)
+        judged_stream = await trio.open_tcp_stream("localhost", common.PORT)
         eval_send_chan, eval_recv_chan = trio.open_memory_channel[bytes](0)
         response_send_chan, response_recv_chan = trio.open_memory_channel[bytes](0)
         collect_send_chan, collect_recv_chan = trio.open_memory_channel[data.Result](0)

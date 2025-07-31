@@ -60,11 +60,12 @@ class Loader(data.Loader):
     """
 
     def path(self) -> str:
-        return os.path.abspath("./problem0")
+        return os.path.dirname(os.path.abspath(__file__))
 
     def load(self) -> List[Question]:
         acc = []
-        with open(r"./problem0/qa_final.json", "r", encoding="utf-8") as f:
+        path = self.path()
+        with open(os.path.join(path, "qa_final.json"), "r", encoding="utf-8") as f:
             for item in json.load(f):
                 if "image_id" not in item:
                     continue
