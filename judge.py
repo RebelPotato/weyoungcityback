@@ -242,6 +242,8 @@ async def main():
     import sshtunnel
     import psycopg
 
+    # TODO: create docker network for network isolation
+
     @asynccontextmanager
     async def task_container(docker_client: docker.DockerClient, loader: data.Loader):
         container = docker_client.containers.run(
