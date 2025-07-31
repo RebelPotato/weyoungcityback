@@ -2,7 +2,7 @@ import pickle
 import trio
 import abc
 from dataclasses import dataclass
-from typing import Any, Union, TypeVar
+from typing import Any, Union
 
 PORT = 4001
 HEADER_SIZE = 16

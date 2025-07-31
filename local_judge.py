@@ -10,7 +10,7 @@ import json
 import httpx
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
-from colorama import Fore, Back, Style, just_fix_windows_console
+from colorama import Style, just_fix_windows_console
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
@@ -18,10 +18,11 @@ warnings.filterwarnings("error")
 CHARS = [" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"]
 
 
-def bar(value: float, max_width: int) -> str:
+def bar(progress: float, full_width: int) -> str:
+    """Make a bar with max width `full_width` with a given progress."""
     n = len(CHARS)
-    value = max(0, min(value, 1))
-    length = math.floor(value * max_width * n)
+    progress = max(0, min(progress, 1))
+    length = math.floor(progress * full_width * n)
     return CHARS[-1] * (length // n) + CHARS[length % n]
 
 

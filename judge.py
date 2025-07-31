@@ -7,6 +7,7 @@ import time
 import openai
 import trio
 from typing import TypedDict, Dict
+from dataclasses import dataclass
 from functools import singledispatch
 from contextlib import asynccontextmanager
 from colorama import just_fix_windows_console
@@ -102,6 +103,7 @@ async def judge_question(
         return common.Response.load(b)
 
     async with WORKER_LIMITER, collect_send_chan, eval_send_chan, response_recv_chan:
+        logger.info(f"Question [{question.id}]")
         response = await send_receive(question.start())
         if isinstance(response, common.ErrRes):
             await send_result(result_err(response.exception))
@@ -178,23 +180,6 @@ async def collector(
     logger.info("collecter: no result left to collect, exiting...")
 
 
-# TODO: make this a dataclass
-class Keys(TypedDict):
-    api_key: str
-    base_url: str
-    ssh_username: str
-    ssh_password: str
-    pg_user: str
-    pg_password: str
-    pg_database: str
-
-
-def get_keys() -> Keys:
-    key_file = r"./key.json"
-    with open(key_file, "r") as f:
-        return Keys(**json.load(f))
-
-
 async def judge_problem(
     openai_client: openai.AsyncOpenAI, loader: data.Loader, results: Results
 ):
@@ -222,7 +207,6 @@ async def judge_problem(
             task_nursery.start_soon(collector, results, collect_recv_chan.clone())
             async with trio.open_nursery() as judges_nursery:
                 for question in loader.load():
-                    logger.info(f"Question [{question.id}]")
                     judges_nursery.start_soon(
                         judge_question,
                         question,
@@ -235,6 +219,17 @@ async def judge_problem(
 
     logger.info(f"Total time: {end_time - start_time:.2f} seconds")
     results.log()
+
+
+@dataclass
+class Keys:
+    api_key: str
+    base_url: str
+    ssh_username: str
+    ssh_password: str
+    pg_user: str
+    pg_password: str
+    pg_database: str
 
 
 async def main():
@@ -281,35 +276,35 @@ async def main():
             logger.info("docker: eval stopped")
 
     just_fix_windows_console()
-    keys = get_keys()
+
+    with open("key.json", "r") as f:
+        keys = Keys(**json.load(f))
     docker_client = docker.from_env()
 
     async with httpx.AsyncClient() as client:
         openai_client = openai.AsyncOpenAI(
-            api_key=keys["api_key"],
-            base_url=keys["base_url"],
+            api_key=keys.api_key,
+            base_url=keys.base_url,
             http_client=client,
         )
         with sshtunnel.SSHTunnelForwarder(
             "81.70.133.142",
-            ssh_username=keys["ssh_username"],
-            ssh_password=keys["ssh_password"],
+            ssh_username=keys.ssh_username,
+            ssh_password=keys.ssh_password,
             remote_bind_address=("localhost", 5432),
         ) as tunnel:
-            assert tunnel is not None, "SSH tunnel failed to start"
+            assert tunnel is not None, "Failed to start SSH tunnel"
             tunnel.start()
-            logger.info("SSH tunnel started")
             with (
                 psycopg.connect(
                     f"host=localhost hostaddr=127.0.0.1 "
-                    f"dbname={keys['pg_database']} "
-                    f"user={keys['pg_user']} "
-                    f"password={keys['pg_password']} "
+                    f"dbname={keys.pg_database} "
+                    f"user={keys.pg_user} "
+                    f"password={keys.pg_password} "
                     f"port={tunnel.local_bind_port}"
                 ) as conn,
                 conn.cursor() as cur,
             ):
-                logger.info("PostgreSQL connection established")
                 while True:
                     cur.execute(
                         "SELECT id, problemID, code FROM submissions WHERE score = 0 ORDER BY submitted_at LIMIT 1"
