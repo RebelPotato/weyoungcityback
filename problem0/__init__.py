@@ -54,30 +54,24 @@ class Question(data.Question):
         )
 
 
-class Loader(data.Loader):
-    """
-    Loader for problem 0.
-    """
+path = os.path.dirname(os.path.abspath(__file__))
 
-    def path(self) -> str:
-        return os.path.dirname(os.path.abspath(__file__))
 
-    def load(self) -> List[Question]:
-        acc = []
-        path = self.path()
-        with open(os.path.join(path, "qa_final.json"), "r", encoding="utf-8") as f:
-            for item in json.load(f):
-                if "image_id" not in item:
-                    continue
-                acc.append(
-                    Question(
-                        id=item["question_id"],
-                        image_path=os.path.join("./problem0/imgs", item["image_id"]),
-                        question=item["question"],
-                        choices=item["choices"],
-                        answer=item["answer"],
-                    )
+def load() -> List[Question]:
+    acc = []
+    with open(os.path.join(path, "qa_final.json"), "r", encoding="utf-8") as f:
+        for item in json.load(f):
+            if "image_id" not in item:
+                continue
+            acc.append(
+                Question(
+                    id=item["question_id"],
+                    image_path=os.path.join("./problem0/imgs", item["image_id"]),
+                    question=item["question"],
+                    choices=item["choices"],
+                    answer=item["answer"],
                 )
-                if len(acc) >= 200:
-                    break
-        return acc
+            )
+            if len(acc) >= 200:
+                break
+    return acc
