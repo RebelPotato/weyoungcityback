@@ -6,7 +6,7 @@ import logging
 import time
 import openai
 import trio
-from typing import Dict
+from typing import Dict, Callable, Sequence, List
 from dataclasses import dataclass
 from functools import singledispatch
 from contextlib import asynccontextmanager
@@ -22,11 +22,12 @@ import problem1
 WORKER_COUNT = 12
 WORKER_LIMITER = trio.CapacityLimiter(WORKER_COUNT)
 
-# TODO: make Loader an object
-LOADERS: Dict[str, data.Loader] = {
-    "0": problem0.Loader(),
-    "1": problem1.Loader(),
+PROBLEM_IDS = {
+    "0": 0,
+    "1": 1,
 }
+LOADS: List[Callable[[], Sequence[data.Question]]] = [problem0.load, problem1.load]
+PATHS: List[str] = [problem0.path, problem1.path]
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
@@ -182,7 +183,9 @@ async def collector(
 
 
 async def judge_problem(
-    openai_client: openai.AsyncOpenAI, loader: data.Loader, results: Results
+    openai_client: openai.AsyncOpenAI,
+    questions: Sequence[data.Question],
+    results: Results,
 ):
     async with trio.open_nursery() as task_nursery:
         judged_stream = await trio.open_tcp_stream("localhost", common.PORT)
@@ -207,7 +210,7 @@ async def judge_problem(
             )
             task_nursery.start_soon(collector, results, collect_recv_chan.clone())
             async with trio.open_nursery() as judges_nursery:
-                for question in loader.load():
+                for question in questions:
                     judges_nursery.start_soon(
                         judge_question,
                         question,
@@ -241,7 +244,7 @@ async def main():
     # TODO: create docker network for network isolation
 
     @asynccontextmanager
-    async def task_container(docker_client: docker.DockerClient, loader: data.Loader):
+    async def task_container(docker_client: docker.DockerClient, path: str):
         container = docker_client.containers.run(
             "judged",
             detach=True,
@@ -262,7 +265,7 @@ async def main():
                     "bind": "/app/answer.py",
                     "mode": "ro",
                 },
-                os.path.join(loader.path(), "answer_zero.py"): {
+                os.path.join(path, "answer_zero.py"): {
                     "bind": "/app/answer_zero.py",
                     "mode": "ro",
                 },
@@ -320,10 +323,11 @@ async def main():
                         await f.write(code)
                     logger.info(f"Submission {submission_id} loaded")
 
-                    loader = LOADERS[problem_id]
+                    problem_id = PROBLEM_IDS[problem_id]
+                    questions = LOADS[problem_id]()
                     results = Results()
-                    async with task_container(docker_client, loader):
-                        await judge_problem(openai_client, loader, results)
+                    async with task_container(docker_client, PATHS[problem_id]):
+                        await judge_problem(openai_client, questions, results)
                     score = results.score()
 
                     logger.info(f"Writing {submission_id} to database ...")

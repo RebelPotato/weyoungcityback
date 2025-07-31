@@ -62,25 +62,19 @@ class Question(data.Question):
         )
 
 
-class Loader(data.Loader):
-    """
-    Loader for problem 1.
-    """
+path = os.path.dirname(os.path.abspath(__file__))
 
-    def path(self) -> str:
-        # TODO use __file__
-        return os.path.abspath("./problem1")
 
-    def load(self) -> List[Question]:
-        acc = []
-        with open(r"./problem1/MVBench_qa.json", "r") as f:
-            for item in json.load(f):
-                acc.append(
-                    Question(
-                        id=item["Question_id"],
-                        video_path=os.path.join("./problem1/videos", item["video_id"]),
-                        question=item["question"],
-                        answer=item["answer"],
-                    )
+def load() -> List[Question]:
+    acc = []
+    with open(r"./problem1/MVBench_qa.json", "r") as f:
+        for item in json.load(f):
+            acc.append(
+                Question(
+                    id=item["Question_id"],
+                    video_path=os.path.join("./problem1/videos", item["video_id"]),
+                    question=item["question"],
+                    answer=item["answer"],
                 )
-        return acc
+            )
+    return acc

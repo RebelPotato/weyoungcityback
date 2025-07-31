@@ -91,18 +91,18 @@ async def main():
         d = json.load(f)
         keys = Keys(api_key=d["api_key"], base_url=d["base_url"])
 
-    problem_id = "0"
-    loader = judge.LOADERS[problem_id]
-    await barf("answer.py", await slurp(os.path.join(loader.path(), "answer.py")))
-    await barf(
-        "answer_zero.py", await slurp(os.path.join(loader.path(), "answer_zero.py"))
-    )
+    problem_id = 0
+    path = judge.PATHS[problem_id]
+    questions = judge.LOADS[problem_id]()
+    await barf("answer.py", await slurp(os.path.join(path, "answer.py")))
+    await barf("answer_zero.py", await slurp(os.path.join(path, "answer_zero.py")))
     results = Results()
+
     async with httpx.AsyncClient() as client, task_process():
         openai_client = openai.AsyncOpenAI(
             api_key=keys.api_key, base_url=keys.base_url, http_client=client
         )
-        await judge.judge_problem(openai_client, loader, results)
+        await judge.judge_problem(openai_client, questions, results)
 
 
 if __name__ == "__main__":

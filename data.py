@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Sequence, Any
+from typing import Any
 import common
 from dataclasses import dataclass
-from colorama import Fore, Back, Style
+from colorama import Fore
 
 
 class Result(ABC):
@@ -24,23 +24,6 @@ class Question(ABC):
 
     @abstractmethod
     def judge(self, choice: Any) -> Result:
-        pass
-
-
-class Loader(ABC):
-    """
-    A Loader creates Questions from a source.
-    """
-
-    @abstractmethod
-    def path(self) -> str:
-        """
-        Returns the path to the files in sandbox.
-        """
-        pass
-
-    @abstractmethod
-    def load(self) -> Sequence[Question]:
         pass
 
 
