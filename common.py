@@ -3,7 +3,7 @@ import trio
 import abc
 import math
 from dataclasses import dataclass
-from typing import Any, Union
+from typing import Any, Union, Tuple, Dict
 
 PORT = 4001
 HEADER_SIZE = 16
@@ -48,6 +48,8 @@ def bar(progress: float, full_width: int) -> str:
 
 
 class Request(abc.ABC):
+    name = "REQ"
+
     @abc.abstractmethod
     def dump(self) -> bytes:
         pass
@@ -55,14 +57,13 @@ class Request(abc.ABC):
     @staticmethod
     def load(b: bytes) -> "Request":
         """Load a Request from bytes."""
-        d = pickle.loads(b)
-        type = d["type"]
-        del d["type"]
+        name, type, kwargs = pickle.loads(b)
+        assert name == Request.name
         match type:
             case "start":
-                return StartReq(**d)
+                return StartReq(**kwargs)
             case "continue":
-                return ContinueReq(**d)
+                return ContinueReq(**kwargs)
             case _:
                 raise ValueError(f"Unknown request type: {type}")
 
@@ -75,12 +76,15 @@ class StartReq(Request):
 
     def dump(self) -> bytes:
         return pickle.dumps(
-            {
-                "type": "start",
-                "question_id": self.question_id,
-                "timeout": self.timeout,
-                "kwargs": self.kwargs,
-            }
+            (
+                Request.name,
+                "start",
+                {
+                    "question_id": self.question_id,
+                    "timeout": self.timeout,
+                    "kwargs": self.kwargs,
+                },
+            )
         )
 
 
@@ -91,15 +95,20 @@ class ContinueReq(Request):
 
     def dump(self) -> bytes:
         return pickle.dumps(
-            {
-                "type": "continue",
-                "question_id": self.question_id,
-                "value": self.value,
-            }
+            (
+                Request.name,
+                "continue",
+                {
+                    "question_id": self.question_id,
+                    "value": self.value,
+                },
+            )
         )
 
 
 class Response(abc.ABC):
+    name = "RES"
+
     @abc.abstractmethod
     def dump(self) -> bytes:
         pass
@@ -107,19 +116,16 @@ class Response(abc.ABC):
     @staticmethod
     def load(b: bytes) -> "Response":
         """Load a Response from bytes."""
-        d = pickle.loads(b)
-        status = d["status"]
-        del d["status"]
+        name, status, value = pickle.loads(b)
+        assert name == Response.name
         match status:
             case "ok":
-                value = d["value"]
-                if value is not None:
-                    d["value"] = Action.load(value)
-                return OkRes(**d)
+                value = Action.load(value) if value is not None else None
+                return OkRes(value=value)
             case "error":
-                return ErrRes(**d)
+                return ErrRes(exception=value)
             case "done":
-                return DoneRes(**d)
+                return DoneRes(value=value)
             case _:
                 raise ValueError(f"Unknown request type: {status}")
 
@@ -130,7 +136,11 @@ class OkRes(Response):
 
     def dump(self) -> bytes:
         return pickle.dumps(
-            {"status": "ok", "value": self.value.dump() if self.value != None else None}
+            (
+                Response.name,
+                "ok",
+                self.value.dump() if self.value is not None else None,
+            )
         )
 
 
@@ -139,7 +149,7 @@ class ErrRes(Response):
     exception: str
 
     def dump(self) -> bytes:
-        return pickle.dumps({"status": "error", "exception": self.exception})
+        return pickle.dumps((Response.name, "error", self.exception))
 
 
 @dataclass
@@ -147,22 +157,24 @@ class DoneRes(Response):
     value: Any
 
     def dump(self) -> bytes:
-        return pickle.dumps({"status": "done", "value": self.value})
+        return pickle.dumps((Response.name, "done", self.value))
 
 
 class Action(abc.ABC):
+    name = "ACT"
+
     @abc.abstractmethod
-    def dump(self) -> dict:
+    def dump(self) -> Tuple[str, str, Dict[str, Any]]:
         pass
 
     @staticmethod
-    def load(d: dict) -> "Action":
+    def load(t: Tuple[str, str, Dict[str, Any]]) -> "Action":
         """Load an Action from a dict."""
-        type = d["type"]
-        del d["type"]
+        name, type, kwargs = t
+        assert name == Action.name
         match type:
             case "complete":
-                return CompleteAction(**d)
+                return CompleteAction(**kwargs)
             case _:
                 raise ValueError(f"Unknown action type: {type}")
 
@@ -173,10 +185,13 @@ class CompleteAction(Action):
     messages: list[dict[str, Any]]
     kwargs: dict[str, Any]
 
-    def dump(self) -> dict:
-        return {
-            "type": "complete",
-            "model": self.model,
-            "messages": self.messages,
-            "kwargs": self.kwargs,
-        }
+    def dump(self) -> Tuple[str, str, Dict[str, Any]]:
+        return (
+            Action.name,
+            "complete",
+            {
+                "model": self.model,
+                "messages": self.messages,
+                "kwargs": self.kwargs,
+            },
+        )

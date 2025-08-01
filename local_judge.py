@@ -46,12 +46,12 @@ async def barf(path: str, data: bytes):
 
 class Results(judge.Results):
     def log(self):
-        width = 50
+        width = 60
         for c, name in zip(RESULT_TYPES, NAMES):
             count = self.count.get(c, 0)
             accuracy = count / self.total if self.total > 0 else 0.0
             print(
-                f"{c.color}{name} [{count:3}/{self.total}|{accuracy:06.1%}"
+                f"{c.color}{name} [{count:3}/{self.total}|{accuracy:>6.1%}"
                 f"|{common.bar(accuracy, width).ljust(width)}]{Style.RESET_ALL}"
             )
 
@@ -95,7 +95,7 @@ async def main():
         type=int,
         default=12,
         help="Number of concurrent jobs to run. Defaults to 12, "
-        "increase it if you have more cores, and change it to 1 for easier debugging.",
+        "increase it if you are impatient, and change it to 1 for easier debugging.",
     )
     parser.add_argument(
         "input",
@@ -115,7 +115,8 @@ async def main():
     input_path = (
         args.input if args.input is not None else os.path.join(path, "answer.py")
     )
-    judge.WORKER_LIMITER = trio.CapacityLimiter(args.jobs)
+    # hidden feature: set to negative to disable the limiter
+    judge.WORKER_LIMITER.total_tokens = args.jobs if args.jobs > 0 else 65535
     await barf("answer.py", await slurp(input_path))
     await barf("answer_zero.py", await slurp(os.path.join(path, "answer_zero.py")))
     results = Results()
