@@ -130,7 +130,7 @@ async def socket_sender(
 async def socket_receiver(
     client_stream: trio.SocketStream,
     response_send_chan: List[trio.MemorySendChannel[common.Response]],
-    question_ids: List[int],
+    question_ids: List[str],
 ):
     """Adapter from SocketStream to SendChannel."""
     logger.info("receiver: started")

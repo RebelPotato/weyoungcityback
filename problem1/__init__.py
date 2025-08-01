@@ -37,7 +37,7 @@ class Question(data.Question):
     A Single question for problem 1.
     """
 
-    id: int
+    id: str
     video_path: str
     question: str
     answer: str
@@ -71,7 +71,7 @@ def load() -> List[Question]:
         for item in json.load(f):
             acc.append(
                 Question(
-                    id=item["Question_id"],
+                    id=str(item["Question_id"]),
                     video_path=os.path.join("./problem1/videos", item["video_id"]),
                     question=item["question"],
                     answer=item["answer"],

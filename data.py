@@ -10,7 +10,7 @@ class Question(ABC):
     A Question is a single test case for the judge to evaluate.
     """
 
-    id: int
+    id: str
 
     @abstractmethod
     def start(self) -> common.StartReq:

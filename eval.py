@@ -36,7 +36,7 @@ class Ok:
 
 
 async def run_task(
-    id: int, func: Callable[[], Any]
+    id: str, func: Callable[[], Any]
 ) -> Ok | common.ErrRes | common.DoneRes:
     def done(e: StopIteration):
         logger.info(f"Task {id} completed successfully")

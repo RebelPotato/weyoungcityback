@@ -70,7 +70,7 @@ class Request(abc.ABC):
 
 @dataclass
 class StartReq(Request):
-    question_id: int
+    question_id: str
     timeout: float
     kwargs: dict[str, Any]
 
@@ -90,7 +90,7 @@ class StartReq(Request):
 
 @dataclass
 class ContinueReq(Request):
-    question_id: int
+    question_id: str
     value: Any
 
     def dump(self) -> bytes:
@@ -108,7 +108,7 @@ class ContinueReq(Request):
 
 class Response(abc.ABC):
     name = "RES"
-    question_id: int
+    question_id: str
 
     @abc.abstractmethod
     def dump(self) -> bytes:
@@ -133,7 +133,7 @@ class Response(abc.ABC):
 
 @dataclass
 class OkRes(Response):
-    question_id: int
+    question_id: str
     value: Union["Action", None]
 
     def dump(self) -> bytes:
@@ -149,7 +149,7 @@ class OkRes(Response):
 
 @dataclass
 class ErrRes(Response):
-    question_id: int
+    question_id: str
     exception: str
 
     def dump(self) -> bytes:
@@ -158,7 +158,7 @@ class ErrRes(Response):
 
 @dataclass
 class DoneRes(Response):
-    question_id: int
+    question_id: str
     value: Any
 
     def dump(self) -> bytes:

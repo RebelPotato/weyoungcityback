@@ -27,7 +27,7 @@ class Question(data.Question):
     A Single question for problem 0.
     """
 
-    id: int
+    id: str
     image_path: str
     question: str
     choices: List[str]
@@ -65,7 +65,7 @@ def load() -> List[Question]:
                 continue
             acc.append(
                 Question(
-                    id=item["question_id"],
+                    id=str(item["question_id"]),
                     image_path=os.path.join("./problem0/imgs", item["image_id"]),
                     question=item["question"],
                     choices=item["choices"],
