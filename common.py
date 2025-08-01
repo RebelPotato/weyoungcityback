@@ -108,6 +108,7 @@ class ContinueReq(Request):
 
 class Response(abc.ABC):
     name = "RES"
+    question_id: int
 
     @abc.abstractmethod
     def dump(self) -> bytes:
@@ -116,22 +117,23 @@ class Response(abc.ABC):
     @staticmethod
     def load(b: bytes) -> "Response":
         """Load a Response from bytes."""
-        name, status, value = pickle.loads(b)
+        name, status, question_id, value = pickle.loads(b)
         assert name == Response.name
         match status:
             case "ok":
                 value = Action.load(value) if value is not None else None
-                return OkRes(value=value)
+                return OkRes(question_id=question_id, value=value)
             case "error":
-                return ErrRes(exception=value)
+                return ErrRes(question_id=question_id, exception=value)
             case "done":
-                return DoneRes(value=value)
+                return DoneRes(question_id=question_id, value=value)
             case _:
                 raise ValueError(f"Unknown request type: {status}")
 
 
 @dataclass
 class OkRes(Response):
+    question_id: int
     value: Union["Action", None]
 
     def dump(self) -> bytes:
@@ -139,6 +141,7 @@ class OkRes(Response):
             (
                 Response.name,
                 "ok",
+                self.question_id,
                 self.value.dump() if self.value is not None else None,
             )
         )
@@ -146,18 +149,20 @@ class OkRes(Response):
 
 @dataclass
 class ErrRes(Response):
+    question_id: int
     exception: str
 
     def dump(self) -> bytes:
-        return pickle.dumps((Response.name, "error", self.exception))
+        return pickle.dumps((Response.name, "error", self.question_id, self.exception))
 
 
 @dataclass
 class DoneRes(Response):
+    question_id: int
     value: Any
 
     def dump(self) -> bytes:
-        return pickle.dumps((Response.name, "done", self.value))
+        return pickle.dumps((Response.name, "done", self.question_id, self.value))
 
 
 class Action(abc.ABC):

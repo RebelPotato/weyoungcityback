@@ -40,11 +40,11 @@ async def run_task(
 ) -> Ok | common.ErrRes | common.DoneRes:
     def done(e: StopIteration):
         logger.info(f"Task {id} completed successfully")
-        return common.DoneRes(value=e.value)
+        return common.DoneRes(question_id=id, value=e.value)
 
     def error(e: Exception):
         logger.error(f"Task {id} raised an exception: {e}")
-        return common.ErrRes(exception=repr(e))
+        return common.ErrRes(question_id=id, exception=repr(e))
 
     result = None
     elapsed = time_left[id] + 1
@@ -68,7 +68,7 @@ async def run_task(
 
     if cancel_scope.cancelled_caught or elapsed > time_left[id]:
         logger.info(f"Task {id} time limit exceeded")
-        return common.ErrRes(exception="Time Limit Exceeded")
+        return common.ErrRes(question_id=id, exception="Time Limit Exceeded")
 
     logger.info(f"Task {id} yielded.")
     time_left[id] -= elapsed
@@ -91,19 +91,16 @@ async def _(data: common.StartReq) -> common.Response:
     time_left[id] = data.timeout
     if ans is None:
         logger.info(f"Cannot start task {id} because an error occurred during import.")
-        result = common.ErrRes(exception=repr(import_error))
+        result = common.ErrRes(question_id=id, exception=repr(import_error))
     else:
         result = await run_task(id, partial(ans.query, **data.kwargs))
     if isinstance(result, Ok):
         running[id] = result.value
-        return common.OkRes(value=None)
+        return common.OkRes(question_id=id, value=None)
     else:
         del running[id]
         del time_left[id]
-        if isinstance(result, common.ErrRes):
-            return result
-        else:
-            return common.ErrRes(exception="Task completed unexpectedly")
+        return result
 
 
 @process.register
@@ -117,10 +114,11 @@ async def _(data: common.ContinueReq) -> common.Response:
     result = await run_task(id, partial(process.send, data.value))
     if isinstance(result, Ok):
         if isinstance(result.value, common.Action):
-            return common.OkRes(value=result.value)
+            return common.OkRes(question_id=id, value=result.value)
         else:
             result = common.ErrRes(
-                exception=f"Task yielded non-action value {repr(result.value)}"
+                question_id=id,
+                exception=f"Task yielded non-action value {repr(result.value)}",
             )
     del running[id]
     del time_left[id]

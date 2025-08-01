@@ -9,7 +9,7 @@ import trio
 from typing import Callable, Sequence, List
 from dataclasses import dataclass
 from functools import singledispatch
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, AsyncExitStack
 from colorama import just_fix_windows_console
 import httpx
 
@@ -38,7 +38,7 @@ async def judge_question(
     client: openai.AsyncOpenAI,
     collect_send_chan: trio.MemorySendChannel[data.Result],
     eval_send_chan: trio.MemorySendChannel[bytes],
-    response_recv_chan: trio.MemoryReceiveChannel[bytes],
+    response_recv_chan: trio.MemoryReceiveChannel[common.Response],
 ):
     """
     Asynchronously judge a question.
@@ -97,8 +97,7 @@ async def judge_question(
 
     async def send_receive(data: common.Request) -> common.Response:
         await eval_send_chan.send(data.dump())
-        b = await response_recv_chan.receive()
-        return common.Response.load(b)
+        return await response_recv_chan.receive()
 
     async with WORKER_LIMITER, collect_send_chan, eval_send_chan, response_recv_chan:
         logger.info(f"Question [{question.id}]")
@@ -130,17 +129,24 @@ async def socket_sender(
 
 async def socket_receiver(
     client_stream: trio.SocketStream,
-    response_send_chan: trio.MemorySendChannel[bytes],
+    response_send_chan: List[trio.MemorySendChannel[common.Response]],
+    question_ids: List[int],
 ):
     """Adapter from SocketStream to SendChannel."""
     logger.info("receiver: started")
-    async with response_send_chan:
+    chans = {}
+    for id, chan in zip(question_ids, response_send_chan):
+        chans[id] = chan
+    async with AsyncExitStack() as stk:
+        for chan in response_send_chan:
+            await stk.enter_async_context(chan)
         while True:
-            data = await common.read_bytes(client_stream)
-            if data is None:
+            bytes = await common.read_bytes(client_stream)
+            if bytes is None:
                 logger.info("receiver: received None, exiting...")
                 return
-            await response_send_chan.send(data)
+            res = common.Response.load(bytes)
+            await chans[res.question_id].send(res)
 
 
 class Results:
@@ -194,36 +200,46 @@ async def judge_problem(
     async with trio.open_nursery() as task_nursery:
         judged_stream = await trio.open_tcp_stream("127.0.0.1", common.PORT)
         eval_send_chan, eval_recv_chan = trio.open_memory_channel[bytes](0)
-        response_send_chan, response_recv_chan = trio.open_memory_channel[bytes](0)
         collect_send_chan, collect_recv_chan = trio.open_memory_channel[data.Result](0)
         start_time = time.time()
         async with (
             judged_stream,
             eval_send_chan,
             eval_recv_chan,
-            response_send_chan,
-            response_recv_chan,
             collect_send_chan,
             collect_recv_chan,
+            AsyncExitStack() as stk,
         ):
+            response_chans = [
+                trio.open_memory_channel[common.Response](0) for _ in questions
+            ]
+            response_send_chans = [
+                await stk.enter_async_context(sc) for (sc, _) in response_chans
+            ]
+            response_recv_chans = [
+                await stk.enter_async_context(rc) for (_, rc) in response_chans
+            ]
             task_nursery.start_soon(
                 socket_sender, judged_stream, eval_recv_chan.clone()
             )
             task_nursery.start_soon(
-                socket_receiver, judged_stream, response_send_chan.clone()
+                socket_receiver,
+                judged_stream,
+                [c.clone() for c in response_send_chans],
+                [q.id for q in questions],
             )
             task_nursery.start_soon(
                 collector, results, len(questions), collect_recv_chan.clone()
             )
             async with trio.open_nursery() as judges_nursery:
-                for question in questions:
+                for question, rc in zip(questions, response_recv_chans):
                     judges_nursery.start_soon(
                         judge_question,
                         question,
                         openai_client,
                         collect_send_chan.clone(),
                         eval_send_chan.clone(),
-                        response_recv_chan.clone(),
+                        rc.clone(),
                     )
         end_time = time.time()
 
