@@ -2,6 +2,7 @@ import trio
 import logging
 import warnings
 import time
+from dataclasses import dataclass
 from functools import partial, singledispatch
 from typing import Callable, Any
 import common
@@ -29,7 +30,14 @@ def timed(func: Callable[[], Any]):
     return result, time.time() - now
 
 
-async def run_task(id: int, func: Callable[[], Any]) -> common.Response:
+@dataclass
+class Ok:
+    value: Any | None
+
+
+async def run_task(
+    id: int, func: Callable[[], Any]
+) -> Ok | common.ErrRes | common.DoneRes:
     def done(e: StopIteration):
         logger.info(f"Task {id} completed successfully")
         return common.DoneRes(value=e.value)
@@ -64,7 +72,7 @@ async def run_task(id: int, func: Callable[[], Any]) -> common.Response:
 
     logger.info(f"Task {id} yielded.")
     time_left[id] -= elapsed
-    return common.OkRes(value=result)
+    return Ok(value=result)
 
 
 @singledispatch
@@ -86,17 +94,16 @@ async def _(data: common.StartReq) -> common.Response:
         result = common.ErrRes(exception=repr(import_error))
     else:
         result = await run_task(id, partial(ans.query, **data.kwargs))
-    if isinstance(result, common.OkRes):
+    if isinstance(result, Ok):
         running[id] = result.value
         return common.OkRes(value=None)
     else:
         del running[id]
         del time_left[id]
-        return (
-            result
-            if isinstance(result, common.ErrRes)
-            else common.ErrRes(exception="Task completed unexpectedly")
-        )
+        if isinstance(result, common.ErrRes):
+            return result
+        else:
+            return common.ErrRes(exception="Task completed unexpectedly")
 
 
 @process.register
@@ -108,12 +115,16 @@ async def _(data: common.ContinueReq) -> common.Response:
 
     process = running[id]
     result = await run_task(id, partial(process.send, data.value))
-    if isinstance(result, common.OkRes):
-        return result
-    else:
-        del running[id]
-        del time_left[id]
-        return result
+    if isinstance(result, Ok):
+        if isinstance(result.value, common.Action):
+            return common.OkRes(value=result.value)
+        else:
+            result = common.ErrRes(
+                exception=f"Task yielded non-action value {repr(result.value)}"
+            )
+    del running[id]
+    del time_left[id]
+    return result
 
 
 async def eval_server(server_stream: trio.SocketStream):

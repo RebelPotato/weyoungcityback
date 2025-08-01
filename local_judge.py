@@ -8,6 +8,7 @@ import openai
 import os
 import json
 import httpx
+import argparse
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from colorama import Style, just_fix_windows_console
@@ -50,8 +51,8 @@ class Results(judge.Results):
             count = self.count.get(c, 0)
             accuracy = count / self.total if self.total > 0 else 0.0
             print(
-                f"{c.color}{name} [{accuracy:06.2%}|{common.bar(accuracy, width).ljust(width)}]{Style.RESET_ALL}"
-                f" {count}/{self.total}"
+                f"{c.color}{name} [{count:3}/{self.total}|{accuracy:06.1%}"
+                f"|{common.bar(accuracy, width).ljust(width)}]{Style.RESET_ALL}"
             )
 
 
@@ -78,14 +79,44 @@ class Keys:
 
 async def main():
     just_fix_windows_console()
+
+    parser = argparse.ArgumentParser(description="WeYoung City Local Judge")
+    parser.add_argument(
+        "-p",
+        "--problem",
+        type=int,
+        required=True,
+        choices=[0, 1],
+        help="Problem ID to judge.",
+    )
+    parser.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        default=12,
+        help="Number of concurrent jobs to run. Defaults to 12, "
+        "increase it if you have more cores, and change it to 1 for easier debugging.",
+    )
+    parser.add_argument(
+        "input",
+        type=str,
+        nargs="?",
+        help="Path to the input file. Defaults to 'answer.py' in the problem directory.",
+    )
+    args = parser.parse_args()
+
     with open("key.json", "r") as f:
         d = json.load(f)
         keys = Keys(api_key=d["api_key"], base_url=d["base_url"])
 
-    problem_id = 0
+    problem_id = args.problem
     path = judge.PATHS[problem_id]
     questions = judge.LOADS[problem_id]()
-    await barf("answer.py", await slurp(os.path.join(path, "answer.py")))
+    input_path = (
+        args.input if args.input is not None else os.path.join(path, "answer.py")
+    )
+    judge.WORKER_LIMITER = trio.CapacityLimiter(args.jobs)
+    await barf("answer.py", await slurp(input_path))
     await barf("answer_zero.py", await slurp(os.path.join(path, "answer_zero.py")))
     results = Results()
 

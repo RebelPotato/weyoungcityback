@@ -19,8 +19,7 @@ import problem0
 import problem1
 
 
-WORKER_COUNT = 24
-WORKER_LIMITER = trio.CapacityLimiter(WORKER_COUNT)
+WORKER_LIMITER = trio.CapacityLimiter(12)
 
 PROBLEM_IDS = {
     "0": 0,
@@ -50,18 +49,16 @@ async def judge_question(
         await collect_send_chan.send(result)
 
     def result_err(e: str) -> data.Result:
-        return (
-            data.TimeLimitExceeded()
-            if e == "Time Limit Exceeded"
-            else data.RuntimeError(e)
-        )
+        if e == "Time Limit Exceeded":
+            return data.TimeLimitExceeded()
+        return data.RuntimeError(e)
 
     value = None
     llm_calls = 0
 
     @singledispatch
     async def perform(action: common.Action | None) -> data.Result | None:
-        raise ValueError(f"Unknown action: {type(action)}")
+        return result_err(repr(f"Unknown action: {repr(action)}"))
 
     @perform.register
     async def _(action: None):
@@ -84,7 +81,7 @@ async def judge_question(
 
     @singledispatch
     async def handle_response(response: common.Response) -> data.Result | None:
-        raise ValueError(f"Unknown response: {type(response)}")
+        raise ValueError(f"Unknown response: {repr(response)}")
 
     @handle_response.register
     async def _(response: common.OkRes):
@@ -184,7 +181,7 @@ async def collector(
             results.add(data)
             i += 1
             logger.info(
-                f"collector: [{i}/{count}|{common.bar(i/count, width).ljust(width)}]"
+                f"collector: [{i:03}/{count}|{common.bar(i/count, width).ljust(width)}]"
             )
     logger.info("collecter: no result left to collect, exiting...")
 

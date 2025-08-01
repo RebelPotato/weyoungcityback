@@ -31,8 +31,8 @@ weyoungcity.zip
 
 ```powershell
 python -m venv .venv              # create venv in folder .venv
-.\.venv\Scripts\activate.ps1      # activate venv, the next pip comes from .venv
-pip install -e .                  # install dependencies and packages (each problem is a package) from 'pyproject.toml' in editable mode
+.\.venv\Scripts\activate.ps1      # activate venv, the next pip will come from .venv
+pip install -e .                  # install dependencies from 'pyproject.toml' in editable mode
 ```
 
 Linux 下换成：
@@ -49,7 +49,7 @@ pip install -e .
 python local_judge.py
 ```
 
-你的任务是修改 answer.py，使你的分数尽可能高。
+你的任务是修改每个文件夹下的 answer.py，使你的分数尽可能高。
 
 ## 部署说明
 
