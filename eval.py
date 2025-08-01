@@ -141,6 +141,8 @@ async def eval_server(server_stream: trio.SocketStream):
 
 
 async def main():
+    # ensure only one thread runs at a time, to make timing fair
+    trio.to_thread.current_default_thread_limiter().total_tokens = 1
     listeners = await trio.open_tcp_listeners(common.PORT)
     await trio.serve_listeners(eval_server, listeners)
 

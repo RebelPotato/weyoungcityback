@@ -44,7 +44,7 @@ async def judge_question(
     Asynchronously judge a question.
     """
 
-    async def send_result(result: data.Result):
+    async def collect(result: data.Result):
         logger.info(f"[{question.id}]{repr(result)}")
         await collect_send_chan.send(result)
 
@@ -58,7 +58,7 @@ async def judge_question(
 
     @singledispatch
     async def perform(action: common.Action | None) -> data.Result | None:
-        return result_err(repr(f"Unknown action: {repr(action)}"))
+        return data.RuntimeError(f"Unknown action: {repr(action)}")
 
     @perform.register
     async def _(action: None):
@@ -81,7 +81,7 @@ async def judge_question(
 
     @singledispatch
     async def handle_response(response: common.Response) -> data.Result | None:
-        raise ValueError(f"Unknown response: {repr(response)}")
+        return data.RuntimeError(f"Unknown response: {repr(response)}")
 
     @handle_response.register
     async def _(response: common.OkRes):
@@ -104,7 +104,7 @@ async def judge_question(
         logger.info(f"Question [{question.id}]")
         response = await send_receive(question.start())
         if isinstance(response, common.ErrRes):
-            await send_result(result_err(response.exception))
+            await collect(result_err(response.exception))
             return
         while llm_calls < 10:
             response = await send_receive(
@@ -112,9 +112,9 @@ async def judge_question(
             )
             result = await handle_response(response)
             if result != None:
-                await send_result(result)
+                await collect(result)
                 return
-        await send_result(data.LLMUsageLimitExceeded())
+        await collect(data.LLMUsageLimitExceeded())
 
 
 async def socket_sender(
