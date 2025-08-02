@@ -3,48 +3,78 @@ import warnings
 import logging
 import cv2
 from typing import List
+from dataclasses import dataclass
 import json
 import os
 import data
+import common
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
 warnings.filterwarnings("error")
 
 
+def read_video(video_path: str) -> List[str]:
+    video = cv2.VideoCapture(video_path)
+
+    base64_frames: List[str] = []
+    while video.isOpened():
+        success, frame = video.read()
+        if not success:
+            break
+        _, buffer = cv2.imencode(".jpg", frame)
+        base64_frames.append(
+            f"data:image/jpg;base64,{base64.b64encode(buffer).decode('utf-8')}"  # type: ignore
+        )
+
+    video.release()
+    return base64_frames
+
+
+@dataclass
 class Question(data.Question):
     """
     A Single question for problem 2.
     """
 
-    def __init__(self):
-        pass
+    id: str
+    video_path: str
+    question: str
+    answer: str
 
-    def start(self) -> data.QuestionStart:
-        pass
+    def start(self) -> common.StartReq:
+        base64_frames = read_video(self.video_path)
+        logger.info(f"[{self.id}]{len(base64_frames)} frames read.")
+        return common.StartReq(
+            timeout=1.0,
+            question_id=self.id,
+            kwargs={
+                "question": self.question,
+                "base64_frames": base64_frames,
+            },
+        )
 
     def judge(self, choice: str) -> data.Result:
-        pass
+        return (
+            data.Accepted(self.answer)
+            if choice == self.answer
+            else data.WrongAnswer(choice=choice, answer=self.answer)
+        )
 
 
-class Loader(data.Loader):
-    """
-    Loader for problem 2.
-    """
+path = os.path.dirname(os.path.abspath(__file__))
 
-    def path(self) -> str:
-        return os.path.abspath("./problem2")
 
-    def load(self) -> List[Question]:
-        acc = []
-        # with open(r"./problem1/MVBench_qa.json", "r") as f:
-        #     for item in json.load(f):
-        #         acc.append(
-        #             Question(
-        #                 id=item["Question_id"],
-        #                 video_path=os.path.join("./problem1/videos", item["video_id"]),
-        #                 question=item["question"],
-        #                 answer=item["answer"],
-        #             )
-        #         )
-        return acc
+def load() -> List[Question]:
+    acc = []
+    with open(r"./problem1/MVBench_qa.json", "r") as f:
+        for item in json.load(f):
+            acc.append(
+                Question(
+                    id=str(item["Question_id"]),
+                    video_path=os.path.join("./problem1/videos", item["video_id"]),
+                    question=item["question"],
+                    answer=item["answer"],
+                )
+            )
+    return acc

@@ -14,13 +14,12 @@ dependencies = [
     "trio>=0.30.0",
 ]
 
+[project.optional-dependencies]
+prod = ["psycopg[binary]>=3.2.9", "sshtunnel>=0.4.0"]
+
 [tool.setuptools]
 packages = ["problem0", "problem1"]
 
 [tool.uv]
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
-dev-dependencies = [
-    "psycopg[binary]>=3.2.9",
-    "sshtunnel>=0.4.0",
-    "snoop>=0.6.0",
-]
+dev-dependencies = ["snoop>=0.6.0"]

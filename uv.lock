@@ -834,11 +834,15 @@ dependencies = [
     { name = "trio" },
 ]
 
+[package.optional-dependencies]
+prod = [
+    { name = "psycopg", extra = ["binary"] },
+    { name = "sshtunnel" },
+]
+
 [package.dev-dependencies]
 dev = [
-    { name = "psycopg", extra = ["binary"] },
     { name = "snoop" },
-    { name = "sshtunnel" },
 ]
 
 [package.metadata]
@@ -849,12 +853,10 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "openai", specifier = ">=1.72.0" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'prod'", specifier = ">=3.2.9" },
+    { name = "sshtunnel", marker = "extra == 'prod'", specifier = ">=0.4.0" },
     { name = "trio", specifier = ">=0.30.0" },
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.2.9" },
-    { name = "snoop", specifier = ">=0.6.0" },
-    { name = "sshtunnel", specifier = ">=0.4.0" },
-]
+dev = [{ name = "snoop", specifier = ">=0.6.0" }]
