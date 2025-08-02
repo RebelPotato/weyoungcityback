@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout 240 -r requirements.txt 
+RUN pip install --no-cache-dir --timeout 240 --index-url http://mirrors.cloud.aliyuncs.com/pypi/simple/ -r requirements.txt 
 
 
 # Set default command to run eval.py
