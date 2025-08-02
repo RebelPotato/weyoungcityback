@@ -111,12 +111,18 @@ git clone weyoungcity.git
 
 ### 配置软件环境
 
-与选手的配置方法类似。
+python 环境与选手的配置方法类似。
 
 ```bash
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e . .[prod]
+```
+
+docker 环境使用：
+
+```bash
+docker build -t judged .
 ```
 
 ### 保证代码一直运行
