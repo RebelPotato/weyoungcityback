@@ -28,10 +28,6 @@ PROBLEM_IDS = {
 LOADS: List[Callable[[], Sequence[data.Question]]] = [problem0.load, problem1.load]
 PATHS: List[str] = [problem0.path, problem1.path]
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(encoding="utf-8", level=logging.INFO)
-warnings.filterwarnings("error")
-
 
 async def judge_question(
     question: data.Question,
@@ -45,7 +41,7 @@ async def judge_question(
     """
 
     async def collect(result: data.Result):
-        logger.info(f"[{question.id}]{repr(result)}")
+        logging.info(f"[{question.id}]{repr(result)}")
         await collect_send_chan.send(result)
 
     def result_err(e: str) -> data.Result:
@@ -100,7 +96,7 @@ async def judge_question(
         return await response_recv_chan.receive()
 
     async with WORKER_LIMITER, collect_send_chan, eval_send_chan, response_recv_chan:
-        logger.info(f"Question [{question.id}]")
+        logging.info(f"Question [{question.id}]")
         response = await send_receive(question.start())
         if isinstance(response, common.ErrRes):
             await collect(result_err(response.exception))
@@ -120,11 +116,11 @@ async def socket_sender(
     client_stream: trio.SocketStream, eval_recv_chan: trio.MemoryReceiveChannel[bytes]
 ):
     """Adapter from ReceiveChannel to SocketStream."""
-    logger.info("sender: started")
+    logging.info("sender: started")
     async with eval_recv_chan:
         async for data in eval_recv_chan:
             await common.write_bytes(data, client_stream)
-    logger.info("sender: no data left to send, exiting...")
+    logging.info("sender: no data left to send, exiting...")
 
 
 async def socket_receiver(
@@ -133,7 +129,7 @@ async def socket_receiver(
     question_ids: List[str],
 ):
     """Adapter from SocketStream to SendChannel."""
-    logger.info("receiver: started")
+    logging.info("receiver: started")
     chans = {}
     for id, chan in zip(question_ids, response_send_chan):
         chans[id] = chan
@@ -143,7 +139,7 @@ async def socket_receiver(
         while True:
             bytes = await common.read_bytes(client_stream)
             if bytes is None:
-                logger.info("receiver: received None, exiting...")
+                logging.info("receiver: received None, exiting...")
                 return
             res = common.Response.load(bytes)
             await chans[res.question_id].send(res)
@@ -168,7 +164,7 @@ class Results:
         return max(1, math.floor(self.accuracy() * 100))
 
     def log(self):
-        logger.info(
+        logging.info(
             f"Accuracy: {self.accuracy():.2%} [{self.count.get(data.Accepted, 0)}/{self.total}]"
         )
 
@@ -179,17 +175,17 @@ async def collector(
     collect_recv_chan: trio.MemoryReceiveChannel[data.Result],
 ):
     """Collect results from the results channel."""
-    logger.info("collector: started")
+    logging.info("collector: started")
     i = 0
     width = 50
     async with collect_recv_chan:
         async for data in collect_recv_chan:
             results.add(data)
             i += 1
-            logger.info(
+            logging.info(
                 f"collector: [{i:03}/{count}|{common.bar(i/count, width).ljust(width)}]"
             )
-    logger.info("collecter: no result left to collect, exiting...")
+    logging.info("collecter: no result left to collect, exiting...")
 
 
 async def judge_problem(
@@ -291,7 +287,7 @@ async def main():
                 },
             },
         )
-        logger.info("docker: container for eval.py spawned")
+        logging.info("docker: container for eval.py spawned")
         try:
             await trio.sleep(3)  # wait for the container to be ready
             yield container
@@ -300,9 +296,18 @@ async def main():
                 container.stop()
             except docker.errors.NotFound:
                 pass
-            logger.info("docker: eval stopped")
+            logging.info("docker: eval stopped")
 
     just_fix_windows_console()
+
+    warnings.filterwarnings("error")
+    logging.basicConfig(
+        filename="/app/judge.log",
+        format="%(asctime)s|%(name)s [%(levelname)s] %(message)s",
+        encoding="utf-8",
+        level=logging.INFO,
+    )
+
     with open("key.json", "r") as f:
         keys = Keys(**json.load(f))
     docker_client = docker.from_env()
@@ -342,7 +347,7 @@ async def main():
                     submission_id, problem_id, code = row
                     async with await trio.open_file("answer.py", "wb") as f:
                         await f.write(code.encode("utf-8"))
-                    logger.info(f"Submission {submission_id} loaded")
+                    logging.info(f"Submission {submission_id} loaded")
 
                     problem_id = PROBLEM_IDS[problem_id]
                     questions = LOADS[problem_id]()
@@ -354,15 +359,15 @@ async def main():
                     results.log()
                     score = results.score()
                     end_time = time.time()
-                    logger.info(f"Total time: {end_time - start_time:.2f} seconds")
+                    logging.info(f"Total time: {end_time - start_time:.2f} seconds")
 
-                    logger.info(f"Writing {submission_id} to database ...")
+                    logging.info(f"Writing {submission_id} to database ...")
                     cur.execute(
                         "UPDATE submissions SET score = %s WHERE id = %s",
                         (score, submission_id),
                     )
                     conn.commit()
-                    logger.info(
+                    logging.info(
                         f"Submission {submission_id} updated with score {score}"
                     )
 

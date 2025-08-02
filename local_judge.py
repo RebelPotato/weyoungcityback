@@ -14,10 +14,6 @@ from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from colorama import Style, just_fix_windows_console
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(encoding="utf-8", level=logging.INFO)
-warnings.filterwarnings("error")
-
 
 RESULT_TYPES = [
     data.Accepted,
@@ -65,11 +61,11 @@ async def task_process():
             trio.run_process,
             [python_exec, "eval.py"],
         )
-        logger.info("process for eval.py spawned")
+        logging.info("process for eval.py spawned")
         await trio.sleep(3)  # give eval.py some time to start.
         yield process
         nursery.cancel_scope.cancel()
-    logger.info("trio: eval.py stopped")
+    logging.info("trio: eval.py stopped")
 
 
 @dataclass
@@ -80,6 +76,7 @@ class Keys:
 
 async def main():
     just_fix_windows_console()
+    common.config_logging()
 
     parser = argparse.ArgumentParser(description="WeYoung City Local Judge")
     parser.add_argument(
@@ -130,7 +127,7 @@ async def main():
         await judge.judge_problem(openai_client, questions, results)
     results.log()
     end_time = time.time()
-    logger.info(f"Total time: {end_time - start_time:.2f} seconds")
+    logging.info(f"Total time: {end_time - start_time:.2f} seconds")
 
 
 if __name__ == "__main__":

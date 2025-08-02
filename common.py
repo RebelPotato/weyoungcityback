@@ -4,6 +4,8 @@ import abc
 import math
 from dataclasses import dataclass
 from typing import Any, Union, Tuple, Dict
+import logging
+import warnings
 
 PORT = 4001
 HEADER_SIZE = 16
@@ -45,6 +47,15 @@ def bar(progress: float, full_width: int) -> str:
     progress = max(0, min(progress, 1))
     length = math.floor(progress * full_width * n)
     return CHARS[-1] * (length // n) + CHARS[length % n]
+
+
+def config_logging():
+    warnings.filterwarnings("error")
+    logging.basicConfig(
+        format="%(asctime)s|%(name)s [%(levelname)s] %(message)s",
+        encoding="utf-8",
+        level=logging.INFO,
+    )
 
 
 class Request(abc.ABC):

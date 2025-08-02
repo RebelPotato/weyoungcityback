@@ -7,15 +7,12 @@ from functools import partial, singledispatch
 from typing import Callable, Any
 import common
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(encoding="utf-8", level=logging.INFO)
-warnings.filterwarnings("error")
 import_error = None
 
 try:
     import answer as ans
 except Exception as e:
-    logger.error(f"import ans raised an exception: {e}")
+    logging.error(f"import ans raised an exception: {e}")
     ans = None
     import_error = e
 
@@ -39,11 +36,11 @@ async def run_task(
     id: str, func: Callable[[], Any]
 ) -> Ok | common.ErrRes | common.DoneRes:
     def done(e: StopIteration):
-        logger.info(f"Task {id} completed successfully")
+        logging.info(f"Task {id} completed successfully")
         return common.DoneRes(question_id=id, value=e.value)
 
     def error(e: Exception):
-        logger.error(f"Task {id} raised an exception: {e}")
+        logging.error(f"Task {id} raised an exception: {e}")
         return common.ErrRes(question_id=id, exception=repr(e))
 
     result = None
@@ -51,7 +48,7 @@ async def run_task(
     with trio.move_on_after(time_left[id] + 0.5) as cancel_scope:
         # add 0.5 seconds to allow for spawning and processing
         try:
-            logger.info(f"Running task {id} with {time_left[id]} seconds left")
+            logging.info(f"Running task {id} with {time_left[id]} seconds left")
             result, elapsed = await trio.to_thread.run_sync(
                 partial(timed, func), abandon_on_cancel=True
             )
@@ -67,10 +64,10 @@ async def run_task(
             return error(e)
 
     if cancel_scope.cancelled_caught or elapsed > time_left[id]:
-        logger.info(f"Task {id} time limit exceeded")
+        logging.info(f"Task {id} time limit exceeded")
         return common.ErrRes(question_id=id, exception="Time Limit Exceeded")
 
-    logger.info(f"Task {id} yielded.")
+    logging.info(f"Task {id} yielded.")
     time_left[id] -= elapsed
     return Ok(value=result)
 
@@ -83,14 +80,14 @@ async def process(data: common.Request) -> common.Response:
 @process.register
 async def _(data: common.StartReq) -> common.Response:
     id = data.question_id
-    logger.info(f"Starting task {id} with timeout {data.timeout} seconds")
+    logging.info(f"Starting task {id} with timeout {data.timeout} seconds")
     if id in running:
         raise ValueError(f"Task {id} is already running")
 
     running[id] = None
     time_left[id] = data.timeout
     if ans is None:
-        logger.info(f"Cannot start task {id} because an error occurred during import.")
+        logging.info(f"Cannot start task {id} because an error occurred during import.")
         result = common.ErrRes(question_id=id, exception=repr(import_error))
     else:
         result = await run_task(id, partial(ans.query, **data.kwargs))
@@ -106,7 +103,7 @@ async def _(data: common.StartReq) -> common.Response:
 @process.register
 async def _(data: common.ContinueReq) -> common.Response:
     id = data.question_id
-    logger.info(f"Resuming task {id}")
+    logging.info(f"Resuming task {id}")
     if id not in running:
         raise ValueError(f"Task {id} is not running")
 
@@ -126,11 +123,11 @@ async def _(data: common.ContinueReq) -> common.Response:
 
 
 async def eval_server(server_stream: trio.SocketStream):
-    logger.info("eval: started")
+    logging.info("eval: started")
     while True:
         b = await common.read_bytes(server_stream)
         if b is None:
-            logger.info(f"eval: eval complete! exiting...")
+            logging.info(f"eval: eval complete! exiting...")
             await server_stream.aclose()
             return
 
@@ -139,6 +136,7 @@ async def eval_server(server_stream: trio.SocketStream):
 
 
 async def main():
+    common.config_logging()
     # ensure only one thread runs at a time, to make timing fair
     trio.to_thread.current_default_thread_limiter().total_tokens = 1
     listeners = await trio.open_tcp_listeners(common.PORT)

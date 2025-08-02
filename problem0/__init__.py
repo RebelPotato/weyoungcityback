@@ -1,5 +1,4 @@
 import base64
-import warnings
 import logging
 import cv2
 from typing import List
@@ -8,10 +7,6 @@ import json
 import os
 import data
 import common
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(encoding="utf-8", level=logging.INFO)
-warnings.filterwarnings("error")
 
 
 def read_image(image_path: str) -> str:
@@ -35,7 +30,7 @@ class Question(data.Question):
 
     def start(self) -> common.StartReq:
         base64_image = read_image(self.image_path)
-        logger.info(f"[{self.id}] read image.")
+        logging.info(f"[{self.id}] read image.")
         return common.StartReq(
             timeout=1.0,
             question_id=self.id,
