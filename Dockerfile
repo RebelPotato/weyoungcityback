@@ -1,5 +1,5 @@
 # Use official Python 3.11 image
-FROM docker.1ms.run/python:3.11.12-alpine
+FROM python:3.11-alpine
 
 # Set working directory
 WORKDIR /app
