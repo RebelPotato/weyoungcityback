@@ -308,7 +308,7 @@ async def main():
         level=logging.INFO,
     )
 
-    with open("key.json", "r") as f:
+    with open("/app/key.json", "r") as f:
         keys = Keys(**json.load(f))
     docker_client = docker.from_env()
 
