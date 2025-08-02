@@ -8,6 +8,7 @@ import openai
 import os
 import json
 import httpx
+import time
 import argparse
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
@@ -121,11 +122,15 @@ async def main():
     await barf("answer_zero.py", await slurp(os.path.join(path, "answer_zero.py")))
     results = Results()
 
+    start_time = time.time()
     async with httpx.AsyncClient() as client, task_process():
         openai_client = openai.AsyncOpenAI(
             api_key=keys.api_key, base_url=keys.base_url, http_client=client
         )
         await judge.judge_problem(openai_client, questions, results)
+    results.log()
+    end_time = time.time()
+    logger.info(f"Total time: {end_time - start_time:.2f} seconds")
 
 
 if __name__ == "__main__":

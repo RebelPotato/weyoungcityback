@@ -19,7 +19,7 @@ import problem0
 import problem1
 
 
-WORKER_LIMITER = trio.CapacityLimiter(12)
+WORKER_LIMITER = trio.CapacityLimiter(24)
 
 PROBLEM_IDS = {
     "0": 0,
@@ -201,7 +201,6 @@ async def judge_problem(
         judged_stream = await trio.open_tcp_stream("127.0.0.1", common.PORT)
         eval_send_chan, eval_recv_chan = trio.open_memory_channel[bytes](0)
         collect_send_chan, collect_recv_chan = trio.open_memory_channel[data.Result](0)
-        start_time = time.time()
         async with (
             judged_stream,
             eval_send_chan,
@@ -241,10 +240,6 @@ async def judge_problem(
                         eval_send_chan.clone(),
                         rc.clone(),
                     )
-        end_time = time.time()
-
-    logger.info(f"Total time: {end_time - start_time:.2f} seconds")
-    results.log()
 
 
 @dataclass
@@ -352,9 +347,14 @@ async def main():
                     problem_id = PROBLEM_IDS[problem_id]
                     questions = LOADS[problem_id]()
                     results = Results()
+
+                    start_time = time.time()
                     async with task_container(docker_client, PATHS[problem_id]):
                         await judge_problem(openai_client, questions, results)
+                    results.log()
                     score = results.score()
+                    end_time = time.time()
+                    logger.info(f"Total time: {end_time - start_time:.2f} seconds")
 
                     logger.info(f"Writing {submission_id} to database ...")
                     cur.execute(
