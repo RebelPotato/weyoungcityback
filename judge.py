@@ -17,6 +17,7 @@ import data
 import common
 import problem0
 import problem1
+import problem2
 
 
 WORKER_LIMITER = trio.CapacityLimiter(24)
@@ -24,9 +25,14 @@ WORKER_LIMITER = trio.CapacityLimiter(24)
 PROBLEM_IDS = {
     "0": 0,
     "1": 1,
+    "2": 2,
 }
-LOADS: List[Callable[[], Sequence[data.Question]]] = [problem0.load, problem1.load]
-PATHS: List[str] = [problem0.path, problem1.path]
+LOADS: List[Callable[[], Sequence[data.Question]]] = [
+    problem0.load,
+    problem1.load,
+    problem2.load,
+]
+PATHS: List[str] = [problem0.path, problem1.path, problem2.path]
 
 
 async def judge_question(
@@ -89,7 +95,7 @@ async def judge_question(
 
     @handle_response.register
     async def _(response: common.DoneRes):
-        return question.judge(response.value)
+        return await question.judge(response.value, client)
 
     async def send_receive(data: common.Request) -> common.Response:
         await eval_send_chan.send(data.dump())

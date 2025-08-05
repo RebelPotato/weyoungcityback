@@ -84,7 +84,7 @@ async def main():
         "--problem",
         type=int,
         required=True,
-        choices=[0, 1],
+        choices=[0, 1, 2],
         help="Problem ID to judge.",
     )
     parser.add_argument(
@@ -116,7 +116,6 @@ async def main():
     # hidden feature: set to negative to disable the limiter
     judge.WORKER_LIMITER.total_tokens = args.jobs if args.jobs > 0 else 65535
     await barf("answer.py", await slurp(input_path))
-    await barf("answer_zero.py", await slurp(os.path.join(path, "answer_zero.py")))
     results = Results()
 
     start_time = time.time()

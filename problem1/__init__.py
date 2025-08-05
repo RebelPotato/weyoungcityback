@@ -49,7 +49,7 @@ class Question(data.Question):
             },
         )
 
-    def judge(self, choice: str) -> data.Result:
+    async def judge(self, choice: str, client) -> data.Result:
         return (
             data.Accepted(self.answer)
             if choice == self.answer

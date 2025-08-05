@@ -3,6 +3,7 @@ from typing import Any
 import common
 from dataclasses import dataclass
 from colorama import Fore
+import openai
 
 
 class Question(ABC):
@@ -17,7 +18,7 @@ class Question(ABC):
         pass
 
     @abstractmethod
-    def judge(self, choice: Any) -> "Result":
+    async def judge(self, choice: Any, client: openai.AsyncClient) -> "Result":
         pass
 
 
