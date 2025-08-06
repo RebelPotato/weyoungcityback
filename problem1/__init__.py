@@ -41,7 +41,7 @@ class Question(data.Question):
         base64_frames = read_video(self.video_path)
         logging.info(f"[{self.id}]{len(base64_frames)} frames read.")
         return common.StartReq(
-            timeout=1.0,
+            timeout=4.0,
             question_id=self.id,
             kwargs={
                 "question": self.question,

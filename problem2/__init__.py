@@ -45,7 +45,7 @@ class Question(data.Question):
         base64_image = read_image(self.image_path)
         logging.info(f"[{self.id}] read image.")
         return common.StartReq(
-            timeout=1.0,
+            timeout=4.0,
             question_id=self.id,
             kwargs={
                 "question": self.question,
@@ -98,6 +98,6 @@ def load() -> List[Question]:
                     answer=item["pred"],
                 )
             )
-            if len(acc) >= 200:
+            if len(acc) >= 1000:
                 break
     return acc
