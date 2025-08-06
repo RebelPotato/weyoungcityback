@@ -7,15 +7,15 @@ requires-python = ">=3.11"
 dependencies = [
     "certifi>=2025.4.26",
     "colorama>=0.4.6",
-    "docker>=7.1.0",
     "httpx>=0.28.1",
     "openai>=1.72.0",
     "opencv-python-headless>=4.12.0.88",
     "trio>=0.30.0",
+    "weyoungcityback[prod]",
 ]
 
 [project.optional-dependencies]
-prod = ["psycopg[binary]>=3.2.9", "sshtunnel>=0.4.0"]
+prod = ["docker>=7.1.0", "psycopg[binary]>=3.2.9", "sshtunnel>=0.4.0"]
 
 [tool.setuptools]
 packages = ["problem0", "problem1"]
@@ -23,3 +23,6 @@ packages = ["problem0", "problem1"]
 [tool.uv]
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
 dev-dependencies = ["snoop>=0.6.0"]
+
+[tool.uv.sources]
+weyoungcityback = { workspace = true }
