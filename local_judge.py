@@ -96,6 +96,13 @@ async def main():
         "increase it if you are impatient, and change it to 1 for easier debugging.",
     )
     parser.add_argument(
+        "-l",
+        "--limit",
+        type=int,
+        default=0,
+        help="Limit dataset to first N questions only. Defaults to 0, which means all questions.",
+    )
+    parser.add_argument(
         "input",
         type=str,
         nargs="?",
@@ -107,9 +114,11 @@ async def main():
         d = json.load(f)
         keys = Keys(api_key=d["api_key"], base_url=d["base_url"])
 
-    problem_id = args.problem
+    problem_id: int = args.problem
     path = judge.PATHS[problem_id]
-    questions = judge.LOADS[problem_id]()
+    questions = judge.LOADS[problem_id](path)
+    if args.limit > 0:
+        questions = questions[: args.limit]
     input_path = (
         args.input if args.input is not None else os.path.join(path, "answer.py")
     )

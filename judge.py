@@ -27,7 +27,7 @@ PROBLEM_IDS = {
     "1": 1,
     "2": 2,
 }
-LOADS: List[Callable[[], Sequence[data.Question]]] = [
+LOADS: List[Callable[[str], Sequence[data.Question]]] = [
     problem0.load,
     problem1.load,
     problem2.load,
@@ -106,6 +106,9 @@ async def judge_question(
         response = await send_receive(question.start())
         if isinstance(response, common.ErrRes):
             await collect(result_err(response.exception))
+            return
+        if isinstance(response, common.DoneRes):
+            await collect(await question.judge(response.value, client))
             return
         while llm_calls < 10:
             response = await send_receive(

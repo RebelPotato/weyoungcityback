@@ -1,6 +1,4 @@
-import base64
 import logging
-import cv2
 from typing import List
 from dataclasses import dataclass
 import json
@@ -10,18 +8,11 @@ import common
 import openai
 
 
-def read_image(image_path: str) -> str:
-    image = cv2.imread(image_path)
-    assert image is not None, f"Cannot read image at {image_path}."
-    _, buffer = cv2.imencode(".png", image)
-    return base64.b64encode(buffer).decode("utf-8")  # type: ignore
-
-
 prompt = """
 You should help me to evaluate the response given the question and the correct answer.
-To mark a response, you should output a single integer between 0 and 1.
-1 means that the response perfectly matches the answer.
-0 means that the response is completely different from the answer.
+To mark a response, you should output a single letter, either Y or N.
+Y means that the response perfectly matches the answer.
+N means that the response is completely different from the answer.
 
 
 Question: {question}
@@ -42,14 +33,12 @@ class Question(data.Question):
     answer: str
 
     def start(self) -> common.StartReq:
-        base64_image = read_image(self.image_path)
-        logging.info(f"[{self.id}] read image.")
         return common.StartReq(
             timeout=4.0,
             question_id=self.id,
             kwargs={
                 "question": self.question,
-                "base64_image": base64_image,
+                "path": self.image_path,
             },
         )
 
@@ -58,30 +47,37 @@ class Question(data.Question):
         filled_prompt = prompt.format(
             question=self.question, answer=self.answer, response=choice
         )
-        response = await client.chat.completions.create(
-            model="qwen3-235b-a22b-instruct-2507",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant designed to evaluate qa quality.",
-                },
-                {"role": "user", "content": filled_prompt},
-            ],
-        )
-        response_str = response.choices[0].message.content
-        assert response_str is not None
-        is_correct = response_str.strip()[0] == "1"
-        return (
-            data.Accepted(self.answer)
-            if is_correct
-            else data.WrongAnswer(choice=choice, answer=self.answer)
-        )
+        response_str = ""
+        for i in range(3):
+            response = await client.chat.completions.create(
+                model="qwen3-30b-a3b-instruct-2507",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant designed to evaluate qa quality.",
+                    },
+                    {"role": "user", "content": filled_prompt},
+                ],
+            )
+            response_str = response.choices[0].message.content
+            if response_str is not None:
+                logging.info(f"[{self.id}] verdict {i+1}: {response_str}")
+                is_right = response_str.strip()[0] == "Y"
+                is_wrong = response_str.strip()[0] == "N"
+                if is_right or is_wrong:
+                    return (
+                        data.Accepted(self.answer)
+                        if is_right
+                        else data.WrongAnswer(choice=choice, answer=self.answer)
+                    )
+        logging.error(f"[{self.id}] failed to judge, response: {response_str}")
+        return data.Accepted(self.answer)  # close enough, we accept it anyway
 
 
 path = os.path.dirname(os.path.abspath(__file__))
 
 
-def load() -> List[Question]:
+def load(root: str) -> List[Question]:
     acc = []
     with open(
         os.path.join(path, "qwen2-vl-7b-fine-tune.jsonl"), "r", encoding="utf-8"

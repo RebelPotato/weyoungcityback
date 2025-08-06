@@ -1,7 +1,7 @@
 import trio
 import logging
-import warnings
 import time
+import collections.abc
 from dataclasses import dataclass
 from functools import partial, singledispatch
 from typing import Callable, Any
@@ -92,12 +92,14 @@ async def _(data: common.StartReq) -> common.Response:
     else:
         result = await run_task(id, partial(ans.query, **data.kwargs))
     if isinstance(result, Ok):
-        running[id] = result.value
-        return common.OkRes(question_id=id, value=None)
-    else:
-        del running[id]
-        del time_left[id]
-        return result
+        if isinstance(result.value, collections.abc.Generator):
+            running[id] = result.value
+            return common.OkRes(question_id=id, value=None)
+        else:
+            result = common.DoneRes(question_id=id, value=result.value)
+    del running[id]
+    del time_left[id]
+    return result
 
 
 @process.register

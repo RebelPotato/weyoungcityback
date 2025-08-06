@@ -1,29 +1,9 @@
-import base64
-import logging
-import cv2
 from typing import List
 from dataclasses import dataclass
 import json
 import os
 import data
 import common
-
-
-def read_video(video_path: str) -> List[str]:
-    video = cv2.VideoCapture(video_path)
-
-    base64_frames: List[str] = []
-    while video.isOpened():
-        success, frame = video.read()
-        if not success:
-            break
-        _, buffer = cv2.imencode(".jpg", frame)
-        base64_frames.append(
-            f"data:image/jpg;base64,{base64.b64encode(buffer).decode('utf-8')}"  # type: ignore
-        )
-
-    video.release()
-    return base64_frames
 
 
 @dataclass
@@ -38,14 +18,12 @@ class Question(data.Question):
     answer: str
 
     def start(self) -> common.StartReq:
-        base64_frames = read_video(self.video_path)
-        logging.info(f"[{self.id}]{len(base64_frames)} frames read.")
         return common.StartReq(
             timeout=4.0,
             question_id=self.id,
             kwargs={
                 "question": self.question,
-                "base64_frames": base64_frames,
+                "path": self.video_path,
             },
         )
 
@@ -60,14 +38,14 @@ class Question(data.Question):
 path = os.path.dirname(os.path.abspath(__file__))
 
 
-def load() -> List[Question]:
+def load(root: str) -> List[Question]:
     acc = []
-    with open(r"./problem1/MVBench_qa.json", "r") as f:
+    with open(os.path.join(path, "MVBench_qa.json"), "r") as f:
         for item in json.load(f):
             acc.append(
                 Question(
                     id=str(item["Question_id"]),
-                    video_path=os.path.join("./problem1/videos", item["video_id"]),
+                    video_path=os.path.join(root, "videos", item["video_id"]),
                     question=item["question"],
                     answer=item["answer"],
                 )
