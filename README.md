@@ -141,14 +141,14 @@ TODO: 服务器上需要怎么配置网络？见 <https://stackoverflow.com/a/64
 
 ### 把评测程序搬到服务器上
 
-我们的代码放在 `/app` 下，包含代码文件夹 `/app/weyoungcity` 与 git bare repo `/app/weyoungcity.git`。
+我们的代码放在 `~/app` 下，包含代码文件夹 `~/app/weyoungcity` 与 git bare repo `~/app/weyoungcity.git`。
 
-在 `/app/weyoungcity.git` 创建一个 [git bare repo](https://ratfactor.com/cards/git-bare-repos)。
+在 `~/app/weyoungcity.git` 创建一个 [git bare repo](https://ratfactor.com/cards/git-bare-repos)。
 
 ```bash
-cd /app
+cd ~/app
 mkdir weyoungcity.git
-cd /app/weyoungcity.git
+cd ~/app/weyoungcity.git
 git init --bare
 ```
 
@@ -156,7 +156,7 @@ git init --bare
 
 ```toml
 [remote "prod"]
-  url = ssh://username@server/app/weyoungcity.git
+  url = ssh://username@server/~/app/weyoungcity.git
 ```
 
 然后运行 `git push prod`，代码就跑到了服务器上！
@@ -164,11 +164,11 @@ git init --bare
 随后在服务器上运行：
 
 ```bash
-cd /app
+cd ~/app
 git clone weyoungcity.git
 ```
 
-这会创建代码文件夹 `/app/weyoungcity`。
+这会创建代码文件夹 `~/app/weyoungcity`。
 
 ### 配置软件环境
 
@@ -177,7 +177,7 @@ python 环境与选手的配置方法类似。
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -e .[prod]
+pip install -e .[prod] --trusted-host mirrors.cloud.aliyuncs.com --index-url http://mirrors.cloud.aliyuncs.com/pypi/simple/
 ```
 
 docker 环境使用：
