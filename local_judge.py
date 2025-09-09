@@ -85,28 +85,28 @@ async def main():
         type=int,
         required=True,
         choices=[0, 1, 2],
-        help="Problem ID to judge.",
+        help="The judged problem's ID.",
     )
     parser.add_argument(
         "-j",
         "--jobs",
         type=int,
         default=12,
-        help="Number of concurrent jobs to run. Defaults to 12, "
-        "increase it if you are impatient, and change it to 1 for easier debugging.",
+        help="Number of concurrent jobs to run, defaults to 12. "
+        "Increase it if you are impatient, and change it to 1 for easier debugging.",
     )
     parser.add_argument(
         "-l",
         "--limit",
         type=int,
         default=0,
-        help="Limit dataset to first N questions only. Defaults to 0, which means all questions.",
+        help="Test the first N questions only, defaults to 0 (test all questions)",
     )
     parser.add_argument(
         "input",
         type=str,
         nargs="?",
-        help="Path to the input file. Defaults to 'answer.py' in the problem directory.",
+        help="Path to the input file. Defaults to 'answer.py' in each problem directory.",
     )
     args = parser.parse_args()
 

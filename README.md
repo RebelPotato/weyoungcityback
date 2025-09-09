@@ -43,10 +43,20 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-启动本地评测脚本使用：
+然后添加你的 API 密钥。在该目录下创建一个文件 `key.json`，如下填写：
+
+```json
+{
+  "api_key": "$你的 API 密钥",
+  "base_url": "$API 域名，如 https://llmapi.paratera.com/v1"
+}
+```
+
+然后启动本地评测脚本，即可开始评测：
 
 ```bash
-python local_judge.py
+python local_judge.py --help # 帮助文档
+python local_judge.py --problem 0 --jobs 12 # 测试问题A，十二线程并发
 ```
 
 你的任务是修改每个文件夹下的 answer.py，使你的分数尽可能高。

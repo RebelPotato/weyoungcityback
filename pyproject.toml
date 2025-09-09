@@ -18,7 +18,7 @@ dependencies = [
 prod = ["docker>=7.1.0", "psycopg[binary]>=3.2.9", "sshtunnel>=0.4.0"]
 
 [tool.setuptools]
-packages = ["problem0", "problem1"]
+packages = ["problem0", "problem1", "problem2"]
 
 [tool.uv]
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"

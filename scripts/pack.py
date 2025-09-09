@@ -15,10 +15,10 @@ FILES = [
     "eval.py",
     "problem0/__init__.py",
     "problem0/answer.py",
-    "problem0/answer_zero.py",
     "problem1/__init__.py",
     "problem1/answer.py",
-    "problem1/answer_zero.py",
+    "problem2/__init__.py",
+    "problem2/answer.py",
 ]
 
 
@@ -37,38 +37,78 @@ def make_files():
             print(f"Warning: {src} does not exist and will not be copied.")
 
 
-def make_zero():
-    """Make a small test dataset for problem0"""
-
-    # Get first 11 images from problem0 folder
-    problem0_dir = "problem0/imgs"
-    assert os.path.exists(problem0_dir)
-
-    image_files = [f for f in os.listdir(problem0_dir) if f.lower().endswith(".png")]
-    selected_images = [f for f in image_files if f.startswith("0_")]
-
-    print(f"Selected images: {selected_images}")
-
-    # Load and filter JSON data with these images
+def make_zero(count):
+    """Make a small test dataset for problem1"""
+    problem1_dir = "problem0"
     dataset_file = "problem0/qa_final.json"
     assert os.path.exists(dataset_file)
 
     with open(dataset_file, "rb") as f:
         dataset = json.load(f)
 
-    testset = [item for item in dataset if item.get("image_id") in selected_images]
+    testset = dataset[0:count]
+    selected_images = [os.path.join(item["image_id"]) for item in testset]
     print(f"Filtered dataset size: {len(testset)}")
 
-    # Save dataset and selected images
+    # Save dataset and selected videos
     dist_dir = "dist/weyoungcity/problem0"
-    os.makedirs(dist_dir, exist_ok=True)
     os.makedirs(os.path.join(dist_dir, "imgs"), exist_ok=True)
     for image in selected_images:
-        src = os.path.join(problem0_dir, image)
+        src = os.path.join(problem1_dir, "imgs", image)
         dst = os.path.join(dist_dir, "imgs", image)
         shutil.copy2(src, dst)
     with open(os.path.join(dist_dir, "qa_final.json"), "w", encoding="utf-8") as f:
         json.dump(testset, f, ensure_ascii=False, indent=4)
+
+
+def make_one(count):
+    """Make a small test dataset for problem1"""
+    problem1_dir = "problem1"
+    dataset_file = "problem1/MVBench_qa.json"
+    assert os.path.exists(dataset_file)
+
+    with open(dataset_file, "rb") as f:
+        dataset = json.load(f)
+
+    testset = dataset[0:count]
+    selected_videos = [os.path.join(item["video_id"]) for item in testset]
+    print(f"Filtered dataset size: {len(testset)}")
+
+    # Save dataset and selected videos
+    dist_dir = "dist/weyoungcity/problem1"
+    os.makedirs(os.path.join(dist_dir, "videos", "left"), exist_ok=True)
+    os.makedirs(os.path.join(dist_dir, "videos", "right"), exist_ok=True)
+    for video in selected_videos:
+        src = os.path.join(problem1_dir, "videos", video)
+        dst = os.path.join(dist_dir, "videos", video)
+        shutil.copy2(src, dst)
+    with open(os.path.join(dist_dir, "MVBench_qa.json"), "w", encoding="utf-8") as f:
+        json.dump(testset, f, ensure_ascii=False, indent=4)
+
+
+def make_two(count):
+    """Make a small test dataset for problem2"""
+    problem2_dir = "problem2"
+    dataset_file = "problem2/qwen2-vl-7b-fine-tune.jsonl"
+
+    with open(dataset_file, "rb") as f:
+        testset = [json.loads(line) for line in f.readlines()[0:count]]
+
+    selected_images = [os.path.join(item["image"]) for item in testset]
+    print(f"Filtered dataset size: {len(testset)}")
+
+    assert os.path.exists(dataset_file)
+    dist_dir = "dist/weyoungcity/problem2"
+    os.makedirs(os.path.join(dist_dir, "O3DVQA/EmbodiedCity/Wuhan/rgb"), exist_ok=True)
+    for image in selected_images:
+        src = os.path.join(problem2_dir, image)
+        dst = os.path.join(dist_dir, image)
+        shutil.copy2(src, dst)
+    with open(
+        os.path.join(dist_dir, "qwen2-vl-7b-fine-tune.jsonl"), "w", encoding="utf-8"
+    ) as f:
+        for line in testset:
+            f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
 
 def main():
@@ -82,7 +122,9 @@ def main():
             shutil.rmtree(item_path)
 
     make_files()
-    make_zero()
+    make_zero(64)
+    make_one(64)
+    make_two(128)
 
     # Create a zip file from the dist/weyoungcity directory
     os.chdir("dist")
