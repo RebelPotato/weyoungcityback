@@ -311,13 +311,13 @@ async def main():
 
     warnings.filterwarnings("error")
     logging.basicConfig(
-        filename="/app/judge.log",
+        filename="judge.log",
         format="%(asctime)s|%(name)s [%(levelname)s] %(message)s",
         encoding="utf-8",
         level=logging.INFO,
     )
 
-    with open("/app/key.json", "r") as f:
+    with open("key.json", "r") as f:
         keys = Keys(**json.load(f))
     docker_client = docker.from_env()
 
@@ -359,7 +359,8 @@ async def main():
                     logging.info(f"Submission {submission_id} loaded")
 
                     problem_id = PROBLEM_IDS[problem_id]
-                    questions = LOADS[problem_id]()
+                    path = PATHS[problem_id]
+                    questions = LOADS[problem_id](path)
                     results = Results()
 
                     start_time = time.time()
