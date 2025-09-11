@@ -50,7 +50,7 @@ class Question(data.Question):
         response_str = ""
         for i in range(3):
             response = await client.chat.completions.create(
-                model="qwen3-30b-a3b-instruct-2507",
+                model="Qwen3-235B-A22B-Instruct-2507",
                 messages=[
                     {
                         "role": "system",

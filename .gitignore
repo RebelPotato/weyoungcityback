@@ -22,8 +22,8 @@ problem2/qwen2-vl-7b-fine-tune.jsonl
 results
 
 # temporary files
-answer.py
-answer_zero.py
+/answer.py
 
 key.json
 .scraps
+weyoungcity.service
