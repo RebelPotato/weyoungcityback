@@ -6,9 +6,8 @@ import base64
 import common
 
 
-def complete(model: str, messages: List[Dict[str, Any]], **kwargs):
+def complete(messages: List[Dict[str, Any]], **kwargs):
     return common.CompleteAction(
-        model=model,
         messages=messages,
         kwargs=kwargs,
     )
@@ -57,7 +56,6 @@ def query(question: str, path: str):
 
     PROMPT_MESSAGES = [{"role": "user", "content": content}]
     result = yield complete(
-        model="Qwen2.5-VL-72B-Instruct",
         messages=PROMPT_MESSAGES,
         temperature=0,
         response_format={"type": "json_object"},

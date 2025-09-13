@@ -197,7 +197,6 @@ class Action(abc.ABC):
 
 @dataclass
 class CompleteAction(Action):
-    model: str
     messages: list[dict[str, Any]]
     kwargs: dict[str, Any]
 
@@ -206,7 +205,6 @@ class CompleteAction(Action):
             Action.name,
             "complete",
             {
-                "model": self.model,
                 "messages": self.messages,
                 "kwargs": self.kwargs,
             },

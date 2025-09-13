@@ -4,9 +4,8 @@ import base64
 import cv2
 
 
-def complete(model, messages, **kwargs):
+def complete(messages, **kwargs):
     return common.CompleteAction(
-        model=model,
         messages=messages,
         kwargs=kwargs,
     )
@@ -39,7 +38,6 @@ def query(question: str, path: str) -> Generator[common.Action, Any, str]:
 
     PROMPT_MESSAGES = [{"role": "user", "content": content}]
     result = yield complete(
-        model="Qwen2.5-VL-72B-Instruct",
         messages=PROMPT_MESSAGES,
         temperature=0,
     )

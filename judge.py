@@ -73,7 +73,7 @@ async def judge_question(
         nonlocal value
         try:
             value = await client.chat.completions.create(
-                model=action.model,
+                model="Qwen2.5-VL-72B-Instruct",
                 messages=action.messages,  # type: ignore
                 **action.kwargs,
             )  # type: ignore
@@ -259,17 +259,19 @@ class Keys:
 
 
 async def main():
-    import docker
-    import docker.errors
+    import podman
+    import podman.client
+    import podman.domain.containers
+    import podman.errors
     import sshtunnel
     import psycopg
 
     @asynccontextmanager
     async def task_container(
-        docker_client: docker.DockerClient,
+        podman_client: podman.client.PodmanClient,
         path: str,
     ):
-        container = docker_client.containers.run(
+        container = podman_client.containers.run(
             "judged",
             detach=True,
             read_only=True,
@@ -296,16 +298,17 @@ async def main():
                 },
             },
         )
-        logging.info("docker: container for eval.py spawned")
+        assert isinstance(container, podman.domain.containers.Container)
+        logging.info("podman: container for eval.py spawned")
         try:
             await trio.sleep(3)  # wait for the container to be ready
             yield container
         finally:
             try:
                 container.stop()
-            except docker.errors.NotFound:
+            except podman.errors.NotFound:
                 pass
-            logging.info("docker: eval stopped")
+            logging.info("podman: eval stopped")
 
     just_fix_windows_console()
 
@@ -319,7 +322,13 @@ async def main():
 
     with open("key.json", "r") as f:
         keys = Keys(**json.load(f))
-    docker_client = docker.from_env()
+    if os.name == "nt":
+        os.environ["PODMAN_CONNECTION_URI"] = "npipe:////./pipe/podman-machine-default"
+        podman_client = podman.PodmanClient(
+            base_url="npipe:////./pipe/podman-machine-default"
+        )
+    else:
+        podman_client = podman.from_env()
 
     async with httpx.AsyncClient() as client:
         openai_client = openai.AsyncOpenAI(
@@ -364,7 +373,7 @@ async def main():
                     results = Results()
 
                     start_time = time.time()
-                    async with task_container(docker_client, PATHS[problem_id]):
+                    async with task_container(podman_client, PATHS[problem_id]):
                         await judge_problem(openai_client, questions, results)
                     results.log()
                     score = results.score()

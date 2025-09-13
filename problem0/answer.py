@@ -5,9 +5,8 @@ import cv2
 import base64
 
 
-def complete(model, messages, **kwargs):
+def complete(messages, **kwargs):
     return common.CompleteAction(
-        model=model,
         messages=messages,
         kwargs=kwargs,
     )
@@ -50,7 +49,6 @@ def query(
 
     PROMPT_MESSAGES = [{"role": "user", "content": content}]
     result = yield complete(
-        model="Qwen2.5-VL-72B-Instruct",
         messages=PROMPT_MESSAGES,
         temperature=0,
         response_format={"type": "json_object"},
