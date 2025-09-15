@@ -7,14 +7,6 @@ from functools import partial, singledispatch
 from typing import Callable, Any
 import common
 
-import_error = None
-
-try:
-    import answer as ans
-except Exception as e:
-    logging.error(f"import ans raised an exception: {e}")
-    ans = None
-    import_error = e
 
 running = {}
 time_left = {}
@@ -137,11 +129,29 @@ async def eval_server(server_stream: trio.SocketStream):
         await common.write_bytes(result.dump(), server_stream)
 
 
+def import_answer():
+    import answer
+    return answer
+
+async def import_answer_in(seconds: float):
+    try:
+        with trio.move_on_after(seconds) as cancel_scope:
+            answer = await trio.to_thread.run_sync(import_answer)
+        if cancel_scope.cancelled_caught:
+            raise TimeoutError(f"Import timeout exceeded {seconds} seconds")
+        return answer, None
+    except Exception as e:
+        logging.error(f"import ans raised an exception: {e}")
+        return None, e
+
 async def main():
+    global ans, import_error
+    ans, import_error = await import_answer_in(0.5)
     common.config_logging()
     # ensure only one thread runs at a time, to make timing fair
     trio.to_thread.current_default_thread_limiter().total_tokens = 1
     listeners = await trio.open_tcp_listeners(common.PORT)
+    logging.info("eval: tcp listeners opened, starting server...")
     await trio.serve_listeners(eval_server, listeners)
 
 

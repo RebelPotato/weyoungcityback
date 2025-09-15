@@ -47,8 +47,9 @@ class Results(judge.Results):
         for c, name in zip(RESULT_TYPES, NAMES):
             count = self.count.get(c, 0)
             accuracy = count / self.total if self.total > 0 else 0.0
+            total_digits = len(str(self.total))
             print(
-                f"{c.color}{name} [{count:3}/{self.total}|{accuracy:>6.1%}"
+                f"{c.color}{name} [{count:>{total_digits}}/{self.total}|{accuracy:>6.1%}"
                 f"|{common.bar(accuracy, width).ljust(width)}]{Style.RESET_ALL}"
             )
 
@@ -62,7 +63,7 @@ async def task_process():
             [python_exec, "eval.py"],
         )
         logging.info("process for eval.py spawned")
-        await trio.sleep(3)  # give eval.py some time to start.
+        await trio.sleep(10)  # give eval.py some time to start.
         yield process
         nursery.cancel_scope.cancel()
     logging.info("trio: eval.py stopped")

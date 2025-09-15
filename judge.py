@@ -278,7 +278,6 @@ async def main():
             remove=os.environ.get("WYCB_DEBUG", "false").lower() != "true",
             # network="TODO",
             ports={f"{common.PORT}/tcp": common.PORT},
-            tmpfs={"/tmp": "rw"},
             volumes={
                 os.path.abspath("eval.py"): {
                     "bind": "/app/eval.py",
@@ -292,16 +291,12 @@ async def main():
                     "bind": "/app/answer.py",
                     "mode": "ro",
                 },
-                os.path.join(path, "answer_zero.py"): {
-                    "bind": "/app/answer_zero.py",
-                    "mode": "ro",
-                },
             },
         )
         assert isinstance(container, podman.domain.containers.Container)
         logging.info("podman: container for eval.py spawned")
         try:
-            await trio.sleep(3)  # wait for the container to be ready
+            await trio.sleep(10)  # wait for the container to be ready
             yield container
         finally:
             try:
@@ -323,6 +318,7 @@ async def main():
     with open("key.json", "r") as f:
         keys = Keys(**json.load(f))
     if os.name == "nt":
+        # make a best-effort to connect to podman socket on Windows
         os.environ["PODMAN_CONNECTION_URI"] = "npipe:////./pipe/podman-machine-default"
         podman_client = podman.PodmanClient(
             base_url="npipe:////./pipe/podman-machine-default"
