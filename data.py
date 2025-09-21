@@ -51,6 +51,9 @@ class WrongAnswer(Result):
 class RuntimeError(Result):
     color = Fore.LIGHTMAGENTA_EX
     error: str
+    def __post_init__(self):
+        if len(self.error) > 100:
+            self.error = self.error[:100] + "...[truncated]"
 
     def __repr__(self):
         return f"{RuntimeError.color}<RE> Runtime error{Fore.RESET}: {self.error}"

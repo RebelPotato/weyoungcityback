@@ -62,8 +62,8 @@ async def task_process():
             trio.run_process,
             [python_exec, "eval.py"],
         )
-        logging.info("process for eval.py spawned")
         await trio.sleep(10)  # give eval.py some time to start.
+        logging.info("process for eval.py spawned")
         yield process
         nursery.cancel_scope.cancel()
     logging.info("trio: eval.py stopped")

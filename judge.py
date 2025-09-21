@@ -3,7 +3,7 @@ import json
 import os
 import warnings
 import logging
-import time
+from datetime import datetime, timezone
 import openai
 import trio
 from typing import Callable, Sequence, List
@@ -20,12 +20,12 @@ import problem1
 import problem2
 
 
-WORKER_LIMITER = trio.CapacityLimiter(24)
+WORKER_LIMITER = trio.CapacityLimiter(48)
 
 PROBLEM_IDS = {
-    "0": 0,
-    "1": 1,
-    "2": 2,
+    "1": 0,
+    "2": 1,
+    "3": 2,
 }
 LOADS: List[Callable[[str], Sequence[data.Question]]] = [
     problem0.load,
@@ -170,7 +170,7 @@ class Results:
         return self.count.get(data.Accepted, 0) / self.total
 
     def score(self) -> int:
-        return max(1, math.floor(self.accuracy() * 100))
+        return math.floor(self.accuracy() * 100)
 
     def log(self):
         logging.info(
@@ -258,6 +258,15 @@ class Keys:
     pg_database: str
 
 
+@dataclass
+class SubmissionIn:
+    id: int
+    user_id: int
+    problem_id: str
+    code: str
+    submitted_at: datetime
+
+
 async def main():
     import podman
     import podman.client
@@ -265,6 +274,7 @@ async def main():
     import podman.errors
     import sshtunnel
     import psycopg
+    import argparse
 
     @asynccontextmanager
     async def task_container(
@@ -291,12 +301,16 @@ async def main():
                     "bind": "/app/answer.py",
                     "mode": "ro",
                 },
+                path: {
+                    "bind": os.path.join("/app", path),
+                    "mode": "ro",
+                },
             },
         )
         assert isinstance(container, podman.domain.containers.Container)
-        logging.info("podman: container for eval.py spawned")
         try:
             await trio.sleep(10)  # wait for the container to be ready
+            logging.info("podman: container for eval.py spawned")
             yield container
         finally:
             try:
@@ -305,8 +319,24 @@ async def main():
                 pass
             logging.info("podman: eval stopped")
 
-    just_fix_windows_console()
+    parser = argparse.ArgumentParser(
+        description="Judge submissions within a time range"
+    )
+    parser.add_argument(
+        "-s",
+        "--start",
+        required=True,
+        help="Start time in ISO format (e.g., 2025-09-25T00:00:00)",
+    )
+    parser.add_argument(
+        "-e", "--end", help="End time in ISO format (e.g., 2025-09-28T23:59:59)"
+    )
+    args = parser.parse_args()
 
+    start_time = datetime.fromisoformat(args.start).astimezone()
+    end_time = datetime.fromisoformat(args.end).astimezone() if args.end else datetime.now().astimezone()
+
+    just_fix_windows_console()
     warnings.filterwarnings("error")
     logging.basicConfig(
         filename="judge.log",
@@ -318,7 +348,7 @@ async def main():
     with open("key.json", "r") as f:
         keys = Keys(**json.load(f))
     if os.name == "nt":
-        # make a best-effort to connect to podman socket on Windows
+        # make a best-effort attempt to connect to podman socket on Windows
         os.environ["PODMAN_CONNECTION_URI"] = "npipe:////./pipe/podman-machine-default"
         podman_client = podman.PodmanClient(
             base_url="npipe:////./pipe/podman-machine-default"
@@ -326,65 +356,131 @@ async def main():
     else:
         podman_client = podman.from_env()
 
-    async with httpx.AsyncClient() as client:
+    with sshtunnel.SSHTunnelForwarder(
+        "81.70.133.142",
+        ssh_username=keys.ssh_username,
+        ssh_password=keys.ssh_password,
+        remote_bind_address=("localhost", 5432),
+    ) as tunnel:
+        assert tunnel is not None, "Failed to start SSH tunnel"
+        tunnel.start()
+        with (
+            psycopg.connect(
+                f"host=localhost hostaddr=127.0.0.1 "
+                f"dbname={keys.pg_database} "
+                f"user={keys.pg_user} "
+                f"password={keys.pg_password} "
+                f"port={tunnel.local_bind_port}"
+            ) as conn,
+            conn.cursor() as cur,
+        ):
+            # Fetch all submissions between start_time and end_time
+            cur.execute(
+                """
+                SELECT id, problemID, user_id, code, submitted_at FROM submissions
+                WHERE submitted_at >= %s AND submitted_at <= %s AND eval_status = '未评测'
+                ORDER BY submitted_at""",
+                (start_time, end_time),
+            )
+            submissions = [
+                SubmissionIn(
+                    id=row[0], problem_id=row[1], user_id=row[2], code=row[3], submitted_at=row[4]
+                )
+                for row in cur.fetchall()
+            ]
+    logging.info(
+        f"Found {len(submissions)} submissions between {start_time} and {end_time}"
+    )
+    # for each user and each problem, only keep the latest submission and mark the rest as ignored
+    latest = {}
+    for s in submissions:
+        key = (s.user_id, s.problem_id)
+        if (
+            key not in latest 
+            or s.submitted_at > latest[key].submitted_at
+        ):
+            latest[key] = s
+    with sshtunnel.SSHTunnelForwarder(
+        "81.70.133.142",
+        ssh_username=keys.ssh_username,
+        ssh_password=keys.ssh_password,
+        remote_bind_address=("localhost", 5432),
+    ) as tunnel:
+        assert tunnel is not None, "Failed to start SSH tunnel"
+        tunnel.start()
+        with (
+            psycopg.connect(
+                f"host=localhost hostaddr=127.0.0.1 "
+                f"dbname={keys.pg_database} "
+                f"user={keys.pg_user} "
+                f"password={keys.pg_password} "
+                f"port={tunnel.local_bind_port}"
+            ) as conn,
+            conn.cursor() as cur,
+        ):
+            for s in submissions:
+                key = (s.user_id, s.problem_id)
+                if key in latest and latest[key].id != s.id:
+                    cur.execute("UPDATE submissions SET eval_status = '已忽略' WHERE id = %s", (s.id,))
+            conn.commit()
+    ignored_count = len(submissions) - len(latest)
+    submissions = list(latest.values())
+    logging.info(f"Ignored {ignored_count} submissions from the same user, {len(submissions)} submissions left to judge")
+    
+
+    async with httpx.AsyncClient(
+        limits = httpx.Limits(max_keepalive_connections=8, max_connections=16)
+    ) as client:
         openai_client = openai.AsyncOpenAI(
             api_key=keys.api_key,
             base_url=keys.base_url,
             http_client=client,
+            timeout=180.0,
+            max_retries=5
         )
-        with sshtunnel.SSHTunnelForwarder(
-            "81.70.133.142",
-            ssh_username=keys.ssh_username,
-            ssh_password=keys.ssh_password,
-            remote_bind_address=("localhost", 5432),
-        ) as tunnel:
-            assert tunnel is not None, "Failed to start SSH tunnel"
-            tunnel.start()
-            with (
-                psycopg.connect(
-                    f"host=localhost hostaddr=127.0.0.1 "
-                    f"dbname={keys.pg_database} "
-                    f"user={keys.pg_user} "
-                    f"password={keys.pg_password} "
-                    f"port={tunnel.local_bind_port}"
-                ) as conn,
-                conn.cursor() as cur,
-            ):
-                while True:
+        for s in submissions:
+            async with await trio.open_file("answer.py", "wb") as f:
+                await f.write(s.code.encode("utf-8"))
+            logging.info(f"Submission {s.id} loaded")
+
+            problem_id = PROBLEM_IDS[s.problem_id]
+            path = PATHS[problem_id]
+            questions = LOADS[problem_id](path)
+            results = Results()
+
+            start_time = datetime.now()
+            async with task_container(podman_client, PATHS[problem_id]):
+                await judge_problem(openai_client, questions, results)
+            results.log()
+            score = results.score()
+            end_time = datetime.now()
+            logging.info(f"Total time: {(end_time - start_time).total_seconds():.2f} seconds")
+
+            logging.info(f"Writing {s.id} to database ...")
+            with sshtunnel.SSHTunnelForwarder(
+                "81.70.133.142",
+                ssh_username=keys.ssh_username,
+                ssh_password=keys.ssh_password,
+                remote_bind_address=("localhost", 5432),
+            ) as tunnel:
+                assert tunnel is not None, "Failed to start SSH tunnel"
+                tunnel.start()
+                with (
+                    psycopg.connect(
+                        f"host=localhost hostaddr=127.0.0.1 "
+                        f"dbname={keys.pg_database} "
+                        f"user={keys.pg_user} "
+                        f"password={keys.pg_password} "
+                        f"port={tunnel.local_bind_port}"
+                    ) as conn,
+                    conn.cursor() as cur,
+                ):
                     cur.execute(
-                        "SELECT id, problemID, code FROM submissions WHERE score = 0 ORDER BY submitted_at LIMIT 1"
-                    )
-                    row = cur.fetchone()
-                    if row is None:
-                        await trio.sleep(5)
-                        continue
-                    submission_id, problem_id, code = row
-                    async with await trio.open_file("answer.py", "wb") as f:
-                        await f.write(code.encode("utf-8"))
-                    logging.info(f"Submission {submission_id} loaded")
-
-                    problem_id = PROBLEM_IDS[problem_id]
-                    path = PATHS[problem_id]
-                    questions = LOADS[problem_id](path)
-                    results = Results()
-
-                    start_time = time.time()
-                    async with task_container(podman_client, PATHS[problem_id]):
-                        await judge_problem(openai_client, questions, results)
-                    results.log()
-                    score = results.score()
-                    end_time = time.time()
-                    logging.info(f"Total time: {end_time - start_time:.2f} seconds")
-
-                    logging.info(f"Writing {submission_id} to database ...")
-                    cur.execute(
-                        "UPDATE submissions SET score = %s WHERE id = %s",
-                        (score, submission_id),
+                        "UPDATE submissions SET score = %s, evaluated_at = %s, eval_status = '评测成功' WHERE id = %s",
+                        (score, end_time.astimezone(tz=timezone.utc), s.id),
                     )
                     conn.commit()
-                    logging.info(
-                        f"Submission {submission_id} updated with score {score}"
-                    )
+            logging.info(f"Submission {s.id} updated with score {score}, evaluated at {end_time}")
 
 
 if __name__ == "__main__":

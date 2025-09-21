@@ -162,6 +162,9 @@ class OkRes(Response):
 class ErrRes(Response):
     question_id: str
     exception: str
+    def __post_init__(self):
+        if len(self.exception) > 100:
+            self.exception = self.exception[:100] + "...[truncated]"
 
     def dump(self) -> bytes:
         return pickle.dumps((Response.name, "error", self.question_id, self.exception))
