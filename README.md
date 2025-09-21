@@ -6,6 +6,8 @@
 
 ```plaintext
 weyoungcity.zip
+├── assets
+│   └── ...
 ├── common.py
 ├── data.py
 ├── eval.py
@@ -16,13 +18,13 @@ weyoungcity.zip
 │   ├── __init__.py
 │   ├── qa_final.json
 │   └── imgs
-│       ├── ...
+│       └── ...
 ├── problem1
 │   ├── answer.py
 │   ├── __init__.py
 │   ├── MVBench_qa.json
 │   └── videos
-│       ├── ...
+│       └── ...
 ├── problem2
 │   ├── answer.py
 │   ├── __init__.py

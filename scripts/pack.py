@@ -20,6 +20,7 @@ FILES = [
     "problem1/answer.py",
     "problem2/__init__.py",
     "problem2/answer.py",
+    "assets",
 ]
 
 
