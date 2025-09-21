@@ -124,9 +124,9 @@ def main():
             shutil.rmtree(item_path)
 
     make_files()
-    make_zero(64)
+    make_zero(200)
     make_one(64)
-    make_two(128)
+    make_two(200)
 
     # Create a zip file from the dist/weyoungcity directory
     os.chdir("dist")
