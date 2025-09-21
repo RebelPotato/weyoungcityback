@@ -1,6 +1,7 @@
 import os
 import shutil
 import json
+import subprocess
 
 FILES = [
     "README.md",

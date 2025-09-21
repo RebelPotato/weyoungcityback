@@ -12,16 +12,23 @@ weyoungcity.zip
 ├── judge.py
 ├── local_judge.py
 ├── problem0
-│   ├── answer.py
-│   ├── answer_zero.py
-│   ├── imgs
-│   │   └── [*].png
-│   ├── __init__.py
-│   └── qa_final.json
+│   ├── answer.py
+│   ├── __init__.py
+│   ├── qa_final.json
+│   └── imgs
+│       ├── ...
 ├── problem1
-│   ├── answer.py
-│   ├── answer_zero.py
-│   └── __init__.py
+│   ├── answer.py
+│   ├── __init__.py
+│   ├── MVBench_qa.json
+│   └── videos
+│       ├── ...
+├── problem2
+│   ├── answer.py
+│   ├── __init__.py
+│   ├── qwen2-vl-7b-fine-tune.jsonl
+│   └── O3DVQA
+│       └── ...
 ├── pyproject.toml
 ├── README.md
 └── uv.lock
@@ -65,26 +72,48 @@ python local_judge.py --problem 0 --jobs 12 # 测试问题A，十二线程并发
 
 你的程序需要实现 `answer.query()` ，它是一个 [Python Generator](https://docs.python.org/3/reference/expressions.html#yield-expressions)（用法可见此 [gist](https://gist.github.com/kolypto/3240037e46bce47d4374331decc298f1)），相当于一个可以暂停的程序。
 
-【TODO：用图片形式描述你的程序与评测程序在干啥】
+![你的程序与评测程序流程图](assets/process.png)
 
 在我们的赛题中：
 
 - 评测程序会对每个数据点调用一次 `answer.query`。
-- 你需要用 `yield` 提交 `Action` 向服务程序示意调取功能，比如用 `yield CompleteAction()` 调用 LLM 文本补全。`yield` 的返回值是功能调用的结果。
-- 用 `return` 返回该数据点的答案，服务程序会标记其为 `AC`（答案正确）或 `WA`（答案错误）。
-- 如果运行过程中发生异常，服务程序会标记 `RE`（运行时错误）。
-- 如果运行超限，服务程序会标记 `TLE`（超时），`LULE`（LLM 调用超限）等错误。
+- 你需要用 `yield` 提交 `Action` 请求，向服务程序示意调取功能。比如 `yield CompleteAction()` ，表示需要调用 LLM 文本补全。`yield` 语句的返回值会是功能调用的结果。
+- 用 `return` 返回该数据点的答案，服务程序会将其判为 `AC`（答案正确）或 `WA`（答案错误）。
+- 如果运行过程中发生异常，服务程序会将其判为 `RE`（运行时错误）。
+- 如果运行超限，服务程序会将其判为 `TLE`（运行时间超过 4s）或`LULE`（LLM 调用次数超过 10 次）。
 
-最终你的分数就是你的准确率，也就是获得 `AC` 的数据点占所有数据的比例。
+最终你的分数就是你的正确率向下取整，也就是获得 `AC` 的数据点占所有数据的比例。
 
-【TODO：每一个 `Action` 干啥】
+目前能进行的请求只有 `common.CompleteAction(messages, kwargs)`，表示调用 LLM 文本补全功能，得到的参数会被原样填入 `client.chat.completions.create` 中。
+
+```python
+# in your program:
+result = yield common.CompleteAction(
+    messages=PROMPT_MESSAGES,
+    kwargs={
+      "temperature": 0,
+      "response_format": {"type": "json_object"},
+    },
+)
+# judge.py will call the llm, so this is equivalent to:
+result = client.chat.completions.create(
+    model="Qwen2.5-VL-72B-Instruct",
+    messages=PROMPT_MESSAGES,
+    temperature=0,
+    response_format={"type": "json_object"},
+)
+```
 
 值得注意的是：
 
+- `answer.query()` 每次运行至多调用 **10** 次 llm，否则该数据点被判为`LULE`。因此，你只能通过 yield 请求评测程序调用 llm 服务，不能自己调用，**否则算犯规！**
 - 函数外的全局变量（如例程里的 `prompt` 字符串）由所有调用共享，函数内的变量在本次调用中有效。因此，**修改全局变量可能带来意外的 bug**！
-- 【TODO：更多注意事项】
 
-如果有不清楚的地方，可以试着跑跑样例，或者发微信咨询管理赛事的同学们。
+如果有不清楚的地方，可以试着跑跑样例程序，或者发微信咨询管理赛事的同学们。
+
+---
+
+如果你是一个参赛选手，阅读以上内容就够了。但如果你想知道评测程序具体是怎么工作的，请继续往下阅读……
 
 ## 如何评测？
 
@@ -92,7 +121,7 @@ python local_judge.py --problem 0 --jobs 12 # 测试问题A，十二线程并发
 
 ![目前评测程序架构](assets/judge.png)
 
-启动主评测程序 `judge.py` 后，每次提交，它会启动一个新的 Docker 容器，将选手提交的程序保存至 `answer.py`，运行副评测程序 `eval.py`。随后，`judge.py` 启动若干服务线程，每个线程负责评测一组数据。
+启动主评测程序 `judge.py` 后，每次提交，它会启动一个新的 Podman 容器，将选手提交的程序保存至 `answer.py`，运行副评测程序 `eval.py`。随后，`judge.py` 启动若干服务线程，每个线程负责评测一组数据。
 
 二评测程序在 `127.0.0.1:4001` 端口通过 tcp 通信。服务线程 `judge_question` 会向 `eval.py` 发送 `Request`，`eval.py` 执行对应的操作并返回 `Response`。协议如下：
 
@@ -105,14 +134,12 @@ python local_judge.py --problem 0 --jobs 12 # 测试问题A，十二线程并发
 值得注意的是：
 
 - 各评测程序共同限制目标程序的资源使用。
-- 为了加快评测，`judge.py` 启动多个服务线程，以并行调用 API。默认最多同时运行 24 个服务线程，目标线程与其一一对应。
+- 为了加快评测，`judge.py` 启动多个服务线程，以并行调用 API。默认最多同时运行 48 个服务线程，目标线程与其一一对应。
 - 为了计时公平，`eval.py` 同一时刻至多只运行一个目标线程，其余已启动的线程处于休眠状态。
-- 内存限制 128MB 限制的是整个 Docker 容器的总内存。时间限制 4s 限制的是每个目标线程的总运行时长，调用服务线程不算时间。
+- 时间限制 4s 限制的是每个目标线程的总运行时长，调用服务线程不算时间。
 - 找出 bug 者大概有赏。
 
-【TODO：我们大概需要储存一些 log，关于选手提交的答案，方便申诉？中间过程大概可以不存，主要图片太多。】
-
-## TODO：文件说明
+所有评测的每一个数据点评测情况都会被记录在 judge.log 文件里，所以有申述的空间。
 
 ## 维护说明
 
@@ -129,15 +156,7 @@ git pull
 
 这里描述我们如何在服务器上运行评测程序。
 
-### 配置硬件软件
-
-TODO：什么硬件配置？网络？评测速度如何？
-
-TODO：什么软件配置？
-
-git, python 3.11.13, docker 版本……
-
-TODO: 服务器上需要怎么配置网络？见 <https://stackoverflow.com/a/64464693>，其中出现的几个 ip 是私有的。
+需要安装的软件有：git, python 3.11.13, podman。
 
 ### 把评测程序搬到服务器上
 
@@ -180,12 +199,18 @@ source .venv/bin/activate
 pip install -e .[prod] --trusted-host mirrors.cloud.aliyuncs.com --index-url http://mirrors.cloud.aliyuncs.com/pypi/simple/
 ```
 
-docker 环境使用：
+Podman 环境使用：
 
 ```bash
-docker build -t judged .
+podman build -t judged .
 ```
 
-### 保证代码一直运行
+### 开始评测
 
-TODO: 一个 systemd 配置。
+评测程序会处理提交时间在要求区间内的所有提交。对每个选手的每个问题，评测程序只允许提交时间最迟的提交，其他提交会被忽略。
+
+```bash
+.venv/bin/python judge.py -s 20250925T000000 -e 20250928T235959
+```
+
+目前必须手动启动评测。
