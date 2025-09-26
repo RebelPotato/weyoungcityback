@@ -19,6 +19,7 @@ problem1/videos
 problem1/MVBench_qa.json
 problem2/O3DVQA
 problem2/qwen2-vl-7b-fine-tune.jsonl
+problem2/system_prompt.txt
 results
 
 # temporary files

@@ -1,7 +1,6 @@
 import os
 import shutil
 import json
-import subprocess
 
 FILES = [
     "README.md",
@@ -20,6 +19,7 @@ FILES = [
     "problem1/answer.py",
     "problem2/__init__.py",
     "problem2/answer.py",
+    "problem2/system_prompt.txt",
     "assets",
 ]
 
