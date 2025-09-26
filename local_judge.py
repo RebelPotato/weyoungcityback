@@ -129,7 +129,12 @@ async def main():
     results = Results()
 
     start_time = time.time()
-    async with httpx.AsyncClient() as client, task_process():
+    async with (
+        httpx.AsyncClient(
+            limits=httpx.Limits(max_keepalive_connections=4, max_connections=8)
+        ) as client,
+        task_process(),
+    ):
         openai_client = openai.AsyncOpenAI(
             api_key=keys.api_key, base_url=keys.base_url, http_client=client
         )

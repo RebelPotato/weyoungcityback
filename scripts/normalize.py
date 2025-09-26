@@ -44,8 +44,8 @@ async def main():
                 print(f"ID: {row[0]}, Status: {row[1]}")
             cur.execute(
                 """
-                UPDATE submissions SET eval_status = '评测成功'
-                WHERE score > 0 AND eval_status = '未评测'
+                UPDATE submissions SET eval_status = '未评测'
+                WHERE id = 84
                 """
             )
             conn.commit()
