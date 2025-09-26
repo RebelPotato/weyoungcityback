@@ -117,7 +117,7 @@ def load(root: str) -> List[Question]:
     with open(
         os.path.join(path, "qwen2-vl-7b-fine-tune.jsonl"), "r", encoding="utf-8"
     ) as f:
-        for line in f.readlines():
+        for line in f.readlines()[0:1600][::-1]:
             item = json.loads(line)
             if "question_id" not in item:
                 continue

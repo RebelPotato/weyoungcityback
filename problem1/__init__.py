@@ -41,7 +41,7 @@ path = os.path.dirname(os.path.abspath(__file__))
 def load(root: str) -> List[Question]:
     acc = []
     with open(os.path.join(path, "MVBench_qa.json"), "r") as f:
-        for item in json.load(f):
+        for item in json.load(f)[::-1]:
             acc.append(
                 Question(
                     id=str(item["Question_id"]),

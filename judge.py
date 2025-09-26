@@ -429,7 +429,7 @@ async def main():
     
 
     async with httpx.AsyncClient(
-        limits = httpx.Limits(max_keepalive_connections=8, max_connections=16)
+        limits = httpx.Limits(max_keepalive_connections=3, max_connections=6)
     ) as client:
         openai_client = openai.AsyncOpenAI(
             api_key=keys.api_key,

@@ -43,7 +43,7 @@ path = os.path.dirname(os.path.abspath(__file__))
 def load(root: str) -> List[Question]:
     acc = []
     with open(os.path.join(path, "qa_final.json"), "r", encoding="utf-8") as f:
-        for item in json.load(f)[0:1000]:
+        for item in json.load(f)[::-1]:
             if "image_id" not in item:
                 continue
             acc.append(
