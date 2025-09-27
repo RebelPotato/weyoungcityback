@@ -306,6 +306,15 @@ async def main():
                     "mode": "ro",
                 },
             },
+            mounts=[
+                {
+                    "type": "tmpfs",
+                    "source": "tmpfs",
+                    "target": "/app/tmp",
+                    "size": "100m",
+                    "chown": True,
+                }
+            ],
         )
         assert isinstance(container, podman.domain.containers.Container)
         try:
@@ -334,7 +343,11 @@ async def main():
     args = parser.parse_args()
 
     start_time = datetime.fromisoformat(args.start).astimezone()
-    end_time = datetime.fromisoformat(args.end).astimezone() if args.end else datetime.now().astimezone()
+    end_time = (
+        datetime.fromisoformat(args.end).astimezone()
+        if args.end
+        else datetime.now().astimezone()
+    )
 
     just_fix_windows_console()
     warnings.filterwarnings("error")
@@ -384,7 +397,11 @@ async def main():
             )
             submissions = [
                 SubmissionIn(
-                    id=row[0], problem_id=row[1], user_id=row[2], code=row[3], submitted_at=row[4]
+                    id=row[0],
+                    problem_id=row[1],
+                    user_id=row[2],
+                    code=row[3],
+                    submitted_at=row[4],
                 )
                 for row in cur.fetchall()
             ]
@@ -395,10 +412,7 @@ async def main():
     latest = {}
     for s in submissions:
         key = (s.user_id, s.problem_id)
-        if (
-            key not in latest 
-            or s.submitted_at > latest[key].submitted_at
-        ):
+        if key not in latest or s.submitted_at > latest[key].submitted_at:
             latest[key] = s
     with sshtunnel.SSHTunnelForwarder(
         "81.70.133.142",
@@ -421,22 +435,26 @@ async def main():
             for s in submissions:
                 key = (s.user_id, s.problem_id)
                 if key in latest and latest[key].id != s.id:
-                    cur.execute("UPDATE submissions SET eval_status = '已忽略' WHERE id = %s", (s.id,))
+                    cur.execute(
+                        "UPDATE submissions SET eval_status = '已忽略' WHERE id = %s",
+                        (s.id,),
+                    )
             conn.commit()
     ignored_count = len(submissions) - len(latest)
     submissions = list(latest.values())
-    logging.info(f"Ignored {ignored_count} submissions from the same user, {len(submissions)} submissions left to judge")
-    
+    logging.info(
+        f"Ignored {ignored_count} submissions from the same user, {len(submissions)} submissions left to judge"
+    )
 
     async with httpx.AsyncClient(
-        limits = httpx.Limits(max_keepalive_connections=3, max_connections=6)
+        limits=httpx.Limits(max_keepalive_connections=3, max_connections=6)
     ) as client:
         openai_client = openai.AsyncOpenAI(
             api_key=keys.api_key,
             base_url=keys.base_url,
             http_client=client,
             timeout=180.0,
-            max_retries=5
+            max_retries=5,
         )
         for s in submissions:
             async with await trio.open_file("answer.py", "wb") as f:
@@ -454,7 +472,9 @@ async def main():
             results.log()
             score = results.score()
             end_time = datetime.now()
-            logging.info(f"Total time: {(end_time - start_time).total_seconds():.2f} seconds")
+            logging.info(
+                f"Total time: {(end_time - start_time).total_seconds():.2f} seconds"
+            )
 
             logging.info(f"Writing {s.id} to database ...")
             with sshtunnel.SSHTunnelForwarder(
@@ -480,7 +500,9 @@ async def main():
                         (score, end_time.astimezone(tz=timezone.utc), s.id),
                     )
                     conn.commit()
-            logging.info(f"Submission {s.id} updated with score {score}, evaluated at {end_time}")
+            logging.info(
+                f"Submission {s.id} updated with score {score}, evaluated at {end_time}"
+            )
 
 
 if __name__ == "__main__":
