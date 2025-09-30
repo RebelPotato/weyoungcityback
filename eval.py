@@ -81,6 +81,9 @@ async def _(data: common.StartReq) -> common.Response:
     if ans is None:
         logging.info(f"Cannot start task {id} because an error occurred during import.")
         result = common.ErrRes(question_id=id, exception=repr(import_error))
+    elif not hasattr(ans, "query"):
+        logging.info(f"Cannot start task {id} because ans has no query function.")
+        result = common.ErrRes(question_id=id, exception="ans has no query function")
     else:
         result = await run_task(id, partial(ans.query, **data.kwargs))
     if isinstance(result, Ok):
@@ -131,7 +134,9 @@ async def eval_server(server_stream: trio.SocketStream):
 
 def import_answer():
     import answer
+
     return answer
+
 
 async def import_answer_in(seconds: float):
     try:
@@ -143,6 +148,7 @@ async def import_answer_in(seconds: float):
     except Exception as e:
         logging.error(f"import ans raised an exception: {e}")
         return None, e
+
 
 async def main():
     global ans, import_error

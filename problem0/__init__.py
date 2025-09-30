@@ -55,4 +55,6 @@ def load(root: str) -> List[Question]:
                     answer=item["answer"],
                 )
             )
+            if len(acc) >= 1000:
+                break
     return acc
